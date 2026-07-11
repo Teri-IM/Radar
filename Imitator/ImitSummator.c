@@ -14,7 +14,7 @@ int Summator(struct SummatorParam *p, struct UnifedTimeOut *time, struct UTimePa
 	}
 
 
-	long long maxCnt = timeP->max_sampling_cnt;
+    //long long maxCnt = timeP->max_sampling_cnt;
 
     memset(out->sum_signals, 0, sizeof(out->sum_signals));
 
