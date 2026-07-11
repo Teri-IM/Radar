@@ -16,6 +16,7 @@
 #include "NIPFormationSignals.h"
 #include "TargetFormationSignals.h"
 #include "ClutterFormationSignals.h"
+#include <string.h>
 
 
 struct ImitSummatorOut{

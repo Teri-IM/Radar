@@ -37,20 +37,29 @@ int NIPPositionMap(struct NIPPosParam *p, struct UTimeParam *timep, struct Unife
 	}
 	long long NIPtime=0;
 	out->cntNip=p->cntNIP;
-	for(int i = 0; i<p->cntNIP; i++){
-		NIPtime=in->total_ns%p->NIPMap[i].NIPprobing_time;
-		if (NIPtime-timep->probing_time<0){
-			out->NIP_map[i].amplitude=p->NIPamplitude;
-			out->NIP_map[i].angle=p->NIPMap[i].angle;
-			out->NIP_map[i].distance=p->NIPMap[i].distance;
-            out->NIP_map[i].discredNum=floor(llabs(NIPtime-(timep->probing_time-timep->pulse_time))*timep->sampling_rate);
-		}else{
-			out->NIP_map[i].amplitude=0;
-			out->NIP_map[i].angle=0;
-			out->NIP_map[i].distance=0;
-			out->NIP_map[i].discredNum=0;
-		}
-	}
+    if (p->enable==1){
+        for(int i = 0; i<p->cntNIP; i++){
+            NIPtime=in->total_ns%p->NIPMap[i].NIPprobing_time;
+            if (NIPtime-timep->probing_time<0){
+                out->NIP_map[i].amplitude=p->NIPamplitude;
+                out->NIP_map[i].angle=p->NIPMap[i].angle;
+                out->NIP_map[i].distance=p->NIPMap[i].distance;
+                out->NIP_map[i].discredNum=floor(llabs(NIPtime-(timep->probing_time-timep->pulse_time))*timep->sampling_rate);
+            }else{
+                out->NIP_map[i].amplitude=0;
+                out->NIP_map[i].angle=0;
+                out->NIP_map[i].distance=0;
+                out->NIP_map[i].discredNum=0;
+            }
+        }
+    }else{
+        for(int i = 0; i<p->cntNIP; i++){
+                out->NIP_map[i].amplitude=0;
+                out->NIP_map[i].angle=0;
+                out->NIP_map[i].distance=0;
+                out->NIP_map[i].discredNum=0;
+        }
+    }
 	return 0;
 }
 

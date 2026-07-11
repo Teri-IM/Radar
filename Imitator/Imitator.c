@@ -2,9 +2,11 @@
 #include "Imitator/UnifiedImitatorParam.h"
 #include <stdlib.h> // Для calloc и free
 #include <time.h>   // Для clock_gettime
-#define tickRate 1
+#define tickRate 10
 
 int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
+    clock_t start, end;
+    double cpu_time_used;
     // Безопасность: проверяем, что сам указатель и критически важные подструктуры не NULL
     if (parametrs == NULL || parametrs->uTime == NULL || parametrs->imitator == NULL) {
         return -1;
@@ -66,30 +68,70 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
     }
 
     // Первоначальное построение карт положений
+    start = clock();
     PPPositionMap(parametrs->ppPosition, parametrs->imitator, &pp_pos_out);
+    end = clock();
+            cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+            printf("Time PPPositionMap: %f секунд\n", cpu_time_used);
+    start = clock();
     createNipMap(parametrs->nipPosition, parametrs->imitator);
+    end = clock();
+            cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+            printf("Time createNipMap: %f секунд\n", cpu_time_used);
+    start = clock();
     TargetPositionMap(parametrs->targetPosition, parametrs->imitator, &target_pos_out);
+    end = clock();
+            cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+            printf("Time TargetPositionMap: %f секунд\n", cpu_time_used);
 
     // Цикл работы имитатора
     for (int i = 0; i < tickRate; i++) {
+
+
         timeTick(parametrs->uTime, &unifed_time_out);
-        //generateNoise(parametrs->noise, &unifed_time_out, &noise_generator_out);
+
+
+        generateNoise(parametrs->noise, &unifed_time_out, &noise_generator_out);
+
+
         AzimuthSensor(parametrs->azimuth, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, tickRate);
 
+
         NIPPositionMap(parametrs->nipPosition, parametrs->uTime, &unifed_time_out, &nip_pos_out);
+
+
         NIPLevelCalculate(parametrs->nipLevel, parametrs->uTime, &azimuth_sensor_out, &nip_pos_out);
+
+
         FormNIPSignal(parametrs->nipFormation, &nip_pos_out, parametrs->uTime, &nip_formation_signals_out);
 
+
+
         clutter_response_calc(parametrs->clutterResponse, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, &pp_pos_out, &pp_find_out);
+
+
+
         FormClutterSignal(parametrs->clutterFormation, &pp_find_out, parametrs->uTime, &pp_signals_out);
 
+
+
         target_response_calc(parametrs->targetResponse, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, &target_pos_out, &target_find_out);
+
+
+
         FormTargetSignal(parametrs->targetFormation, &target_find_out, parametrs->uTime, &target_signals_out);
+
+
 
         Summator(parametrs->summator, &unifed_time_out, parametrs->uTime, &target_signals_out, &pp_signals_out, &nip_formation_signals_out, &noise_generator_out, &summator_out);
 
+
+
         FrequencyConverter(parametrs->frequencyConverter, &unifed_time_out, &summator_out);
+
+
         createImitatatorOutData(&summator_out, &unifed_time_out, &azimuth_sensor_out, out);
+
     }
 
     // Освобождение памяти
