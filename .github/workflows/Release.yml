@@ -30,16 +30,6 @@ jobs:
       run: |
         mkdir build
         cd build
-        qmake ../src/untitled.pro CONFIG+=release  # Подставьте точное имя вашего .pro файла, если оно отличается
-        make -j$(nproc)                        # Сборка в несколько потоков для ускорения
+        qmake ../src/untitled.pro CONFIG+=release
+        make -f Makefile -j$(nproc)    
 
-    # 5. Собираем проект
-    #- name: Build Project
-    #  run: |
-    #    cmake --build build --config Release
-
-    # 6. Запуск тестов (если они настроены в CMake через add_test / ctest)
-    #- name: Run Tests
-    #  run: |
-    #    cd build
-    #    ctest --output-on-failure
