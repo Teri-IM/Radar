@@ -2,7 +2,7 @@ name: Qt qmake CI Build & Test
 
 on:
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, other, develop ]
 
 jobs:
   build-and-test:
@@ -18,9 +18,9 @@ jobs:
         sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xinput0 libxcb-shape0 libxcb-xfixes0 xvfb
 
     - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v4
       with:
-        version: '6.8.0'
+        version: '6.7.2'
         arch: 'gcc_64'
         cache: true
 
