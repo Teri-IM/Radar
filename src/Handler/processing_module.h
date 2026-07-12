@@ -1,13 +1,6 @@
 #ifndef PROCESSING_MODULE_H
 #define PROCESSING_MODULE_H
 
-//#include "Handler/ADC.h"
-//#include "Handler/DDC.h"
-//#include "Handler/codogramm_param.h"
-//#include "Handler/codogramm.h"
-//#include "Handler/suppression_NIP_param.h"
-//#include "Handler/NIP.h"
-//#include "Handler/nn.h"
 #include "Handler/processing_module_param.h"
 
 struct Instruct
