@@ -10,7 +10,7 @@
 #define NIP_H
 
 #include "processing_module.h"
-#include "suppression_NIP_param.h"
+#include "suppression_NIP_Param.h"
 
 
 int suppression_NIP(struct suppression_NIP_Param *param, struct data *in, struct data *out);

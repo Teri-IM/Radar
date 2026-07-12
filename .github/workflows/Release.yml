@@ -20,10 +20,9 @@ jobs:
         sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xinput0 libxcb-shape0 libxcb-xfixes0
     # 3. Устанавливаем и кешируем Qt
     - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v4
       with:
-        version: '5.7.0' # Укажите вашу версию Qt (например, 5.15.2 или 6.7.0)
-        arch: 'gcc_64'   # Архитектура для Linux
+        version: '6.7.2' # Укажите вашу версию Qt (например, 5.15.2 или 6.7.0)
         cache: true      # Кеширование ускорит последующие сборки
 
     # 4. Генерируем Makefile через qmake и запускаем сборку
@@ -31,16 +30,6 @@ jobs:
       run: |
         mkdir build
         cd build
-        qmake ../../src/untitled.pro CONFIG+=release  # Подставьте точное имя вашего .pro файла, если оно отличается
-        make -j$(nproc)                        # Сборка в несколько потоков для ускорения
+        qmake ../src/src.pro CONFIG+=release
+        make -f Makefile -j$(nproc)    
 
-    # 5. Собираем проект
-    #- name: Build Project
-    #  run: |
-    #    cmake --build build --config Release
-
-    # 6. Запуск тестов (если они настроены в CMake через add_test / ctest)
-    #- name: Run Tests
-    #  run: |
-    #    cd build
-    #    ctest --output-on-failure

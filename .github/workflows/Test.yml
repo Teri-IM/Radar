@@ -18,10 +18,8 @@ jobs:
         sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xinput0 libxcb-shape0 libxcb-xfixes0 xvfb
 
     - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v4
       with:
-        version: '6.8.0'
-        arch: 'gcc_64'
         cache: true
 
     # Генерируем Makefile для всего проекта (включая подпроекты src и tests)
@@ -29,7 +27,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        qmake ../../root.pro CONFIG+=release
+        qmake ../radar.pro CONFIG+=release
 
     # Собираем и приложение, и тесты
     - name: Build All
