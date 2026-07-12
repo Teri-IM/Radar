@@ -6,7 +6,7 @@
 #include "codogramm.h"
 #include "suppression_NIP_param.h"
 #include "suppression_NIP.h"
-//#include "nn.h"
+#include "nn.h"
 #include "processing_module_param.h"
 
 
@@ -39,7 +39,7 @@ struct Codogramm
     int time;
     int index;
     int number_of_objects;
-    struct threshold_device_out qwer[256];
+    struct threshold_device_out sign[256];
 }; //структура, которую мы отдаем в визуал
 
 int ProcessingModule(struct GlobalProcessingParam *Params, struct data *Input_Sign, struct data *Output_sign);

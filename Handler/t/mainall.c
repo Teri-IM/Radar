@@ -3,8 +3,8 @@
 
 int main()
 {
-    GlobalProcessingParam Param;
-    data Input_Sign, Output_Sign;
+    struct GlobalProcessingParam Param;
+    struct data Input_Sign, Output_Sign;
     Param.ADC.enable = 1;
     Param.DDC.enable = 1;
     Param.NN.enable = 1;
@@ -19,7 +19,7 @@ int main()
     {
         Input_Sign.amplitude[i] = i;
     }
-    int ProcessingModule(GlobalProcessingParam *Param, data *Input_Sign, data *Output_sign);
+    int ProcessingModule(struct GlobalProcessingParam *Param, struct data *Input_Sign, struct data *Output_sign);
     
     return 0;
 }
