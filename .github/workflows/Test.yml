@@ -2,7 +2,7 @@ name: Qt qmake CI Build & Test
 
 on:
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, other, develop ]
 
 jobs:
   build-and-test:
