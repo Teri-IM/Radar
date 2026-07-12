@@ -12,10 +12,21 @@ INCLUDEPATH += ../src \
                ../src/UI
 
 # Подключаем файлы логики, которые хотим протестировать (БЕЗ main.cpp приложения!)
-# Для примера протестируем модуль времени или АЦП
 SOURCES += Imitator.cpp \
            ../src/Handler/ADC.c \
-           ../src/Imitator/UnifedTime.c
+           ../src/Imitator/UnifedTime.c \
+           ../src/Imitator/NoiseGenerator.c \
+           ../src/Imitator/PPPosition.c \
+           ../src/Imitator/NIPPosition.c \
+           ../src/Imitator/TargetPosition.c \
+           ../src/Imitator/FrequencyConverter.c \
+           ../src/Imitator/AzimuthSensor.c
 
 HEADERS += ../src/Handler/ADC.h \
-           ../src/Imitator/UnifedTime.h
+           ../src/Imitator/UnifedTime.h \
+           ../src/Imitator/NoiseGenerator.h \
+           ../src/Imitator/PPPosition.h \
+           ../src/Imitator/NIPPosition.h \
+           ../src/Imitator/TargetPosition.h \
+           ../src/Imitator/FrequencyConverter.h \
+           ../src/Imitator/AzimuthSensor.h
