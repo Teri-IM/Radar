@@ -22,9 +22,7 @@ jobs:
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
-        setup-python: false
         version: '6.7.2' # Укажите вашу версию Qt (например, 5.15.2 или 6.7.0)
-        arch: 'gcc_64'   # Архитектура для Linux
         cache: true      # Кеширование ускорит последующие сборки
 
     # 4. Генерируем Makefile через qmake и запускаем сборку
