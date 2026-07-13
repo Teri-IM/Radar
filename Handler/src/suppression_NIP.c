@@ -6,7 +6,7 @@
    Последние правки: 07.07.2026
 */
 
-#include "include\suppression_NIP.h"
+#include "../include/suppression_NIP.h"
 
 
 int suppression_NIP(struct GlobalProcessingParam *param, struct data *in, struct data *out)

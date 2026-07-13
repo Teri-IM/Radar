@@ -1,5 +1,5 @@
-#include "include\processing_module.h"
-#include "include\processing_module_param.h"
+#include "../include/processing_module.h"
+#include "../include/processing_module_param.h"
 
 int ProcessingModule(struct GlobalProcessingParam *Params, struct data *Input_Sign, struct data *Output_sign)
 {

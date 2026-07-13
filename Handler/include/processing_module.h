@@ -1,7 +1,7 @@
 #ifndef PROCESSING_MODULE_H
 #define PROCESSING_MODULE_H
 
-//#include "ADC.h"
+#include "ADC.h"
 #include "DDC.h"
 #include "codogramm.h"
 #include "suppression_NIP_param.h"
