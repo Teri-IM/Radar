@@ -23,7 +23,8 @@
 extern "C" {
 #include "Imitator/Imitator.h"
 #include "Imitator/UnifiedImitatorParam.h"
-
+#include "Handler/include/processing_module.h"
+#include "Handler/include/processing_module_param.h"
 // Предполагаемый прототип вашего обработчика (подставьте ваш реальный, если имена отличаются)
 // void Handler(struct HandlerParametrs *params, struct ImitOutData *inData, struct HandlerOutData *outData);
 }
@@ -153,8 +154,8 @@ int main(int argc, char *argv[]) {
     simOutput->SummatorData->sum_signals = (float *)calloc(simParams->uTime->max_sampling_cnt, sizeof(float));
 
     // Выходные данные ОБРАБОТЧИКА (сюда запишутся отметки целей/координаты для отрисовки)
-    // struct HandlerOutData *handlerOutput = (struct HandlerOutData *)malloc(sizeof(struct HandlerOutData));
-    // struct HandlerParametrs *handlerParams = (struct HandlerParametrs *)malloc(sizeof(struct HandlerParametrs));
+    struct Codogramm *handlerOutput = (struct Codogramm *)malloc(sizeof(struct Codogramm));
+    struct GlobalProcessingParam *handlerParams = (struct GlobalProcessingParam *)malloc(sizeof(struct GlobalProcessingParam));
 
     // Состояния GUI
     double currentAngle = 0.0;
@@ -212,7 +213,7 @@ int main(int argc, char *argv[]) {
             currentAngle+=1;
 
             // 2. Подаем 3 параметра в Обработчик (Настройки обработчика -> Сигнал из имитатора -> Результат обнаружения)
-            // Handler(handlerParams, simOutput, handlerOutput);
+            ProcessingModule(handlerParams, simOutput, handlerOutput);
 
             // Получаем угол из выходных данных имитатора
             if (simOutput->AzimuthData != nullptr) {
@@ -265,8 +266,8 @@ int main(int argc, char *argv[]) {
     free(simOutput->TimeData);
     free(simOutput);
 
-    // free(handlerOutput);
-    // free(handlerParams);
+    free(handlerOutput);
+    free(handlerParams);
 
     free(simParams->imitator); free(simParams->uTime); free(simParams->azimuth);
     free(simParams->ppPosition); free(simParams->clutterResponse); free(simParams->clutterFormation);
