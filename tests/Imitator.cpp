@@ -142,7 +142,7 @@ private slots:
             struct UTimeParam timeParams = {};
             struct UnifedTimeOut timeInput = {};
             struct AzimutSensorOut output = {10.0f, 0.0f, 0.0f};
-            timeParams.probing_time = 100000LL;
+            timeParams.probing_time = 50000LL;
 
             int result = AzimuthSensor(&params, &timeParams, &timeInput, &output, 1);
 
