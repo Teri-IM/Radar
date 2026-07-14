@@ -1,0 +1,43 @@
+name: Qt qmake CI Build & Test
+
+on:
+  pull_request:
+    branches: [ main, other, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Ubuntu dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xinput0 libxcb-shape0 libxcb-xfixes0 xvfb
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        cache: true
+
+    # Генерируем Makefile для всего проекта (включая подпроекты src и tests)
+    - name: Run qmake
+      run: |
+        mkdir build
+        cd build
+        qmake ../radar.pro CONFIG+=release
+
+    # Собираем и приложение, и тесты
+    - name: Build All
+      run: |
+        cd build
+        make -j$(nproc)
+
+    # Запуск тестов. Используем xvfb-run на случай, если под капотом тестов
+    # неявно инициализируется QApplication / QWidget окружение (чтобы CI не падал без дисплея)
+    - name: Run Autotests
+      run: |
+        cd build/tests
+        xvfb-run ./run_tests
