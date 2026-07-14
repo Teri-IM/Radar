@@ -164,7 +164,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build                          # Ждем, пока выполнится первая джоба сборки
     environment: production               # Ссылаемся на созданное нами окружение с ручным аппрувом
-    
+    permissions:
+      contents: write
+      
     steps:
     # Скачиваем ранее сохраненный инсталлятор
     - name: Download compiled installer
