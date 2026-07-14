@@ -2,26 +2,42 @@ name: Pack Windows App on Merge with Label
 
 on:
   pull_request:
-    types: [ closed ]
+    #types: [ closed ]
     branches: [ "main" ]
 
 jobs:
   pack-windows:
     runs-on: windows-latest
-    # Запускаем только если:
-    # 1. PR был успешно слит (merged)
-    # 2. У PR была метка 'release-win'
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win')
+    # if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win')
 
     env:
       TARGET_NAME: "untitled"           # Имя твоего бинарника
-      QT_VERSION: "6.7.2"               # Версия Qt
+      QT_VERSION: "6.7.2"               # Версия Qt (синхронизирована с твоей)
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 1. Установка Qt
+    # 1. Очистка путей от "чужих" компиляторов (GCC 15 и Strawberry Perl)
+    # Это полностью убирает ошибку "multiple definition of QtPrivate::IsFloatType_v"
+    - name: Clean System PATH from conflicting GCC compilers
+      shell: powershell
+      run: |
+        Write-Host "Исходный PATH:"
+        $paths = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+        
+        # Удаляем из путей системные папки MSYS2, MinGW и Strawberry Perl, которые GitHub Actions ставит по умолчанию
+        $filtered_paths = $env:PATH -split ';' | Where-Object { 
+            $_ -notlike "*msys64*" -and 
+            $_ -notlike "*mingw*" -and 
+            $_ -notlike "*Strawberry*"
+        }
+        
+        $new_path = $filtered_paths -join ';'
+        echo "PATH=$new_path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        Write-Host "Очищенный PATH подготовлен для шагов сборки."
+
+    # 2. Установка Qt (архитектура win64_mingw)
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
@@ -29,30 +45,54 @@ jobs:
         arch: "win64_mingw"
         cache: true
 
-    # 2. Скачивание rcedit для вшивания иконки radar.ico в exe
+    # 3. Добавление "родного" MinGW из установленного Qt в приоритет PATH
+    - name: Set up MinGW PATH
+      shell: powershell
+      run: |
+        $qt_root = "${{ env.QT_ROOT_DIR }}"
+        # Вычисляем путь к папке Tools, где лежит совместимый MinGW
+        $parent_dir = Split-Path $qt_root -Parent
+        $tools_dir = Join-Path $parent_dir "Tools"
+        
+        # Ищем папку компилятора (например, mingw1120_64 или аналогичную для этой версии)
+        $mingw_bin = Get-ChildItem -Path $tools_dir -Directory -Filter "mingw*" | 
+                     Select-Object -First 1 | 
+                     ForEach-Object { Join-Path $_.FullName "bin" }
+        
+        if ($mingw_bin -and (Test-Path $mingw_bin)) {
+            Write-Host "Добавляем родной MinGW в PATH: $mingw_bin" -ForegroundColor Green
+            echo "$mingw_bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        } else {
+            throw "Ошибка: не удалось найти папку компилятора MinGW в каталоге инструментов Qt ($tools_dir)!"
+        }
+
+    # 4. Скачивание rcedit для вшивания иконки radar.ico в exe
     - name: Download rcedit
       shell: powershell
       run: |
         Invoke-WebRequest -Uri "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile "rcedit.exe"
 
-    # 3. Сборка проекта через qmake
+    # 5. Сборка проекта через qmake (используем .pro файл)
     - name: Build with qmake and make
       shell: powershell
       run: |
         mkdir build
         cd build
-        # 1. Добавляем -spec win32-g++, чтобы qmake искал g++, а не cl (MSVC)
-        qmake ../src/src.pro CONFIG+=release -spec win32-g++
-        # 2. Безопасный вызов make без сложного парсинга ядер
+        if (Test-Path "../src/src.pro") {
+            qmake ../src/src.pro CONFIG+=release -spec win32-g++
+        } else {
+            qmake ../untitled.pro CONFIG+=release -spec win32-g++
+        }
         mingw32-make
 
-    # 4. Создание папки публикации (dist) и запуск windeployqt
+    # 6. Создание папки публикации (dist) и запуск windeployqt
     - name: Deploy Qt Dependencies
       shell: powershell
       run: |
         $DIST_DIR = "$pwd\dist"
         New-Item -ItemType Directory -Path $DIST_DIR
         
+        # Находим скомпилированный exe в папке build
         $compiled_exe = Get-ChildItem -Path "build" -Filter "${{ env.TARGET_NAME }}.exe" -Recurse | Select-Object -First 1
         if ($null -eq $compiled_exe) { throw "Скомпилированный файл ${{ env.TARGET_NAME }}.exe не найден!" }
         
@@ -61,7 +101,7 @@ jobs:
         Write-Host "Сбор зависимостей через windeployqt..."
         windeployqt --release --compiler-runtime "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
 
-    # 5. Вшивание иконки radar.ico в исполняемый файл
+    # 7. Вшивание иконки radar.ico в исполняемый файл
     - name: Inject Icon
       shell: powershell
       run: |
@@ -75,7 +115,7 @@ jobs:
             Write-Warning "Файл radar.ico не найден в корне проекта."
         }
 
-    # 6. Автоматическая генерация скрипта Inno Setup (.iss)
+    # 8. Автоматическая генерация скрипта Inno Setup (.iss)
     - name: Generate Inno Setup Script
       shell: powershell
       run: |
@@ -113,13 +153,13 @@ jobs:
         $IssTemplate | Out-File -FilePath $ISS_FILE -Encoding utf8
         Write-Host "Файл конфигурации installer.iss успешно создан!" -ForegroundColor Green
 
-    # 7. Компиляция инсталлятора с помощью Inno Setup
+    # 9. Компиляция инсталлятора с помощью Inno Setup
     - name: Compile Installer
       shell: powershell
       run: |
         & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "$pwd\installer.iss"
 
-    # 8. Загрузка готового файла установщика в артефакты GitHub
+    # 10. Загрузка готового файла установщика в артефакты GitHub
     - name: Upload Installer Artifact
       uses: actions/upload-artifact@v4
       with:
