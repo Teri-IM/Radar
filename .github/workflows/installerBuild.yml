@@ -41,7 +41,7 @@ jobs:
         mkdir build
         cd build
         # 1. Добавляем -spec win32-g++, чтобы qmake искал g++, а не cl (MSVC)
-        qmake ../untitled.pro CONFIG+=release -spec win32-g++
+        qmake ../src/src.pro CONFIG+=release -spec win32-g++
         # 2. Безопасный вызов make без сложного парсинга ядер
         mingw32-make
 
