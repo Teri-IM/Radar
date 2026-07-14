@@ -20,7 +20,7 @@ int FormNIPSignal(struct NIPFormationParam *p,
         return 1;
     }
 
-
+    long long maxCnt = timeP->max_sampling_cnt;
     if (p->enable==1){
         int idx=0;
         for (int i = 0; i < nipPosIn->cntNip; i++) {
