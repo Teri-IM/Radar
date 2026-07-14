@@ -9,7 +9,7 @@ jobs:
   # Первая работа: Сборка, сбор зависимостей и генерация инсталлятора
   build:
     runs-on: windows-latest
-    if: github.event.pull_request.merged == true #&& contains(github.event.pull_request.labels.*.name, 'release-win')
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win')
     
     env:
       TARGET_NAME: "untitled"
