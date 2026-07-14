@@ -19,23 +19,80 @@
 #include <QFont>
 #include <cmath>
 
-#include <QElapsedTimer> // Добавьте этот инклюд в начало файла main.cpp
-#include <QDebug>        // Для удобного вывода в консоль Qt
+#include <QThread>
+#include <QMutex>
 
 // Подключаем Си-интерфейсы
 extern "C" {
 #include "Imitator/Imitator.h"
 #include "Imitator/UnifiedImitatorParam.h"
-
-// Предполагаемый прототип вашего обработчика (подставьте ваш реальный, если имена отличаются)
-// void Handler(struct HandlerParametrs *params, struct ImitOutData *inData, struct HandlerOutData *outData);
 }
 
+// =========================================================================
+// ГЛОБАЛЬНЫЕ ДАННЫЕ СИНХРОНИЗАЦИИ ПОТОКОВ (Для разделения GUI и математики)
+// =========================================================================
+QMutex g_dataMutex;          // Мьютекс для защиты общих данных РЛС
+double g_sharedAngle = 0.0;   // Актуальный угол, передаваемый из Си-модели в GUI
+
+// Флаги управления (атомарные, так как читаются из разных потоков)
+std::atomic<bool> g_isSimulationRunning{false};
+std::atomic<bool> g_isRotating{true};
+std::atomic<bool> g_isRadiationOn{false};
+std::atomic<bool> g_threadShouldStop{false};
+
+// =========================================================================
+// ПОТОК ВЫЧИСЛЕНИЙ РЛС (Выполняет тяжелую Си-математику)
+// =========================================================================
+class RadarComputeWorker : public QThread {
+public:
+    struct ImitatorParametrs *simParams;
+    struct ImitOutData *simOutput;
+    int tickRate;
+
+    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out, int rate)
+        : simParams(p), simOutput(out), tickRate(rate) {}
+
+protected:
+    void run() override {
+        while (!g_threadShouldStop.load()) {
+            if (g_isSimulationRunning.load()) {
+
+                // Синхронизируем интерактивные флаги управления перед шагом модели
+                simParams->azimuth->angularVelocity = g_isRotating.load() ? 10.0 : 0.0;
+                simParams->targetFormation->enable = g_isRadiationOn.load() ? 1 : 0;
+                simParams->clutterFormation->enable = g_isRadiationOn.load() ? 1 : 0;
+
+                // Вызов Си-имитатора (точка долгой задержки вычислений)
+                // Теперь выполняется в отдельном системном потоке!
+                Imitator(simParams, simOutput);
+
+                // Защищаем критическую секцию обновления данных для графики
+                g_dataMutex.lock();
+                if (simOutput->AzimuthData != nullptr) {
+                    g_sharedAngle = simOutput->AzimuthData->azimuth_new;
+                    simParams->azimuth->startAngle = g_sharedAngle;
+                }
+                // [ЗДЕСЬ БУДЕТ ВЫЗОВ ОБРАБОТЧИКА]:
+                // Handler(..., simOutput, ...);
+                // Копируем обнаруженные точки в g_sharedTargets под мьютексом
+                g_dataMutex.unlock();
+
+            } else {
+                // Если симуляция на паузе, спим 5 мс, чтобы не грузить ядро процессора пустым циклом
+                msleep(5);
+            }
+        }
+    }
+};
+
+// =========================================================================
+// ОСНОВНАЯ ФУНКЦИЯ ПРИЛОЖЕНИЯ
+// =========================================================================
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
 
     QWidget window;
-    window.setWindowTitle("Индикатор кругового обзора");
+    window.setWindowTitle("Индикатор кругового обзора (Многопоточный режим)");
     window.setMinimumSize(500, 300);
     window.setStyleSheet("background-color: black;");
 
@@ -66,10 +123,15 @@ int main(int argc, char *argv[]) {
     radButton->setMinimumSize(160, 44);
     radButton->setStyleSheet(buttonStyle);
 
+    //QPushButton *paramButton = new QPushButton("Настройка параметров", &window);
+    //paramButton->setMinimumSize(160, 44);
+    //paramButton->setStyleSheet("font-size: 14px; padding: 8px; color: white; background-color: #2980b9; border: 1px solid #3498db;");
+
     controlLayout->addWidget(controlLabel);
     controlLayout->addWidget(simButton);
     controlLayout->addWidget(rotationButton);
     controlLayout->addWidget(radButton);
+    //controlLayout->addWidget(paramButton);
     controlLayout->addStretch(1);
 
     QWidget *controlWidget = new QWidget(&window);
@@ -80,94 +142,67 @@ int main(int argc, char *argv[]) {
     mainLayout->addWidget(radarLabel, 3);
     mainLayout->addWidget(controlWidget, 1);
 
-    // =========================================================================
-    // 1. ВЫДЕЛЕНИЕ И НАСТРОЙКА ВХОДНЫХ ПАРАМЕТРОВ ИМИТАТОРА
-    // =========================================================================
+    // Выделение памяти под Си-структуры параметров
     struct ImitatorParametrs *simParams = (struct ImitatorParametrs *)malloc(sizeof(struct ImitatorParametrs));
-
     simParams->imitator = (struct ImitParam *)malloc(sizeof(struct ImitParam));
     simParams->imitator->maxDistance = 100000.0;
-
     simParams->uTime = (struct UTimeParam *)malloc(sizeof(struct UTimeParam));
     simParams->uTime->probing_time = 10000;
     simParams->uTime->pulse_time = 6000;
     simParams->uTime->max_sampling_cnt = 10000000;
     simParams->uTime->sampling_rate = 2000;
-
     simParams->azimuth = (struct AzimutParam *)malloc(sizeof(struct AzimutParam));
     simParams->azimuth->startAngle = 0.0;
     simParams->azimuth->angularVelocity = 10.0;
-
     simParams->ppPosition = (struct PPPosParam *)malloc(sizeof(struct PPPosParam));
     simParams->ppPosition->cntPP = 3;
     simParams->ppPosition->enable = 1;
     simParams->ppPosition->PPamplitude = 500.0;
-
     simParams->clutterResponse = (struct ClutterResponseParams *)malloc(sizeof(struct ClutterResponseParams));
     simParams->clutterResponse->enable = 1;
-
     simParams->clutterFormation = (struct ClutterFormationParam *)malloc(sizeof(struct ClutterFormationParam));
     simParams->clutterFormation->enable = 1;
-
     simParams->targetPosition = (struct TargetPosParam *)malloc(sizeof(struct TargetPosParam));
     simParams->targetPosition->cntTarget = 3;
     simParams->targetPosition->enable = 1;
     simParams->targetPosition->Targetamplitude = 1500.0;
-
     simParams->targetFormation = (struct TargetFormationParam *)malloc(sizeof(struct TargetFormationParam));
     simParams->targetFormation->enable = 1;
-
     simParams->targetResponse = (struct TargetResponseParams *)malloc(sizeof(struct TargetResponseParams));
     simParams->targetResponse->enable = 1;
-
     simParams->nipPosition = (struct NIPPosParam *)malloc(sizeof(struct NIPPosParam));
     simParams->nipPosition->cntNIP = 3;
     simParams->nipPosition->enable = 1;
     simParams->nipPosition->NIPamplitude = 600.0;
-
     simParams->nipLevel = (struct NIPLvlParam *)malloc(sizeof(struct NIPLvlParam));
     simParams->nipLevel->enable = 1;
     simParams->nipLevel->amplitudeDecrease = 10.0;
-
     simParams->nipFormation = (struct NIPFormationParam *)malloc(sizeof(struct NIPFormationParam));
     simParams->nipFormation->enable = 1;
-
     simParams->summator = (struct SummatorParam *)malloc(sizeof(struct SummatorParam));
     simParams->summator->enable = 1;
-
     simParams->frequencyConverter = (struct FreqConvertorParam *)malloc(sizeof(struct FreqConvertorParam));
     simParams->frequencyConverter->enable = 1;
-
     simParams->noise = (struct NoiseParam *)malloc(sizeof(struct NoiseParam));
     simParams->noise->enable = 0;
     simParams->noise->mean = 20;
     simParams->noise->sigma = 15;
 
-    // =========================================================================
-    // 2. СОЗДАНИЕ ВЫХОДНЫХ СТРУКТУР (ДЛЯ ИМИТАТОРА И ОБРАБОТЧИКА)
-    // =========================================================================
     struct ImitOutData *simOutput = (struct ImitOutData *)malloc(sizeof(struct ImitOutData));
-
-    // Дополнительно выделяем память под вложенные структуры данных, если они нужны обработчику
     simOutput->TimeData = (struct UnifedTimeOut *)calloc(1, sizeof(struct UnifedTimeOut));
     simOutput->AzimuthData = (struct AzimutSensorOut *)calloc(1, sizeof(struct AzimutSensorOut));
     simOutput->SummatorData = (struct ImitSummatorOut *)calloc(1, sizeof(struct ImitSummatorOut));
-    // Выделяем буфер под сигналы сумматора, которые считает имитатор
     simOutput->SummatorData->sum_signals = (float *)calloc(simParams->uTime->max_sampling_cnt, sizeof(float));
 
-    // Выходные данные ОБРАБОТЧИКА (сюда запишутся отметки целей/координаты для отрисовки)
-    // struct HandlerOutData *handlerOutput = (struct HandlerOutData *)malloc(sizeof(struct HandlerOutData));
-    // struct HandlerParametrs *handlerParams = (struct HandlerParametrs *)malloc(sizeof(struct HandlerParametrs));
-
-    // Состояния GUI
-    double currentAngle = 0.0;
-    bool isSimulationRunning = false;
-    bool isRotating = true;
-    bool isRadiationOn = false;
+    // Инициализация и запуск вычислительного потока
+    int tickRate = 10;
+    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput, tickRate);
+    workerThread->start();
 
     const double PI = 3.141592653589793;
     QTimer timer;
 
+    // Слой отрисовки интерфейса (Поток GUI) - срабатывает строго каждые 30 мс
     auto redraw = [&]() {
         QElapsedTimer frameTimer;
         frameTimer.start();
@@ -175,69 +210,44 @@ int main(int argc, char *argv[]) {
         QSize size = radarLabel->size();
         if (size.width() < 4 || size.height() < 4) return;
 
-        int w = size.width();
-        int h = size.height();
-        QPixmap pixmap(w, h);
+        QPixmap pixmap(size.width(), size.height());
         pixmap.fill(Qt::transparent);
 
         QPainter painter(&pixmap);
         painter.setRenderHint(QPainter::Antialiasing);
 
-        int cx = w / 2;
-        int cy = h / 2;
+        int cx = size.width() / 2;
+        int cy = size.height() / 2;
         int radius = std::min(cx, cy) - 25;
 
-        // Отрисовка статической сетки РЛС
+        // Статическая сетка
         painter.setPen(QPen(QColor(0, 100, 0), 1));
         painter.drawEllipse(QPoint(cx, cy), radius, radius);
         painter.drawEllipse(QPoint(cx, cy), radius * 2 / 3, radius * 2 / 3);
         painter.drawEllipse(QPoint(cx, cy), radius / 3, radius / 3);
 
         painter.setPen(QPen(QColor(0, 80, 0), 1, Qt::DashLine));
-        QFont font = painter.font();
-        font.setPointSize(9);
-        painter.setFont(font);
-
         for (int i = 0; i < 360; i += 30) {
             double rad = (i - 90) * PI / 180.0;
             painter.drawLine(cx, cy, cx + radius * std::cos(rad), cy + radius * std::sin(rad));
-            painter.setPen(QPen(QColor(0, 150, 0)));
-            painter.drawText(QRect(cx + (radius + 15) * std::cos(rad) - 15, cy + (radius + 15) * std::sin(rad) - 10, 30, 20), Qt::AlignCenter, QString::number(i) + "°");
-            painter.setPen(QPen(QColor(0, 80, 0), 1, Qt::DashLine));
         }
 
-        // РАБОТА С ДВИЖКАМИ МАТЕМАТИКИ И ОБРАБОТКИ
-        if (isSimulationRunning) {
-            simParams->azimuth->angularVelocity = isRotating ? 10.0 : 0.0;
-            simParams->targetFormation->enable = isRadiationOn ? 1 : 0;
-            simParams->clutterFormation->enable = isRadiationOn ? 1 : 0;
+        // КРИТИЧЕСКАЯ СЕКЦИЯ: Быстро забираем данные из вычислительного потока
+        g_dataMutex.lock();
+        double drawAngle = g_sharedAngle;
+        // Тут забираем локальную копию карты целей для отрисовки от обработчика
+        g_dataMutex.unlock();
 
-
-            // 1. Подаем 2 параметра в Имитатор (Входные настройки -> Выходной сигнал)
-            Imitator(simParams, simOutput);
-            currentAngle+=1;
-
-            // 2. Подаем 3 параметра в Обработчик (Настройки обработчика -> Сигнал из имитатора -> Результат обнаружения)
-            // Handler(handlerParams, simOutput, handlerOutput);
-
-            // Получаем угол из выходных данных имитатора
-            if (simOutput->AzimuthData != nullptr) {
-                currentAngle = simOutput->AzimuthData->azimuth_new;
-                simParams->azimuth->startAngle=currentAngle;
-            }
-
-            // [ТУТ ОТРИСОВКА ЦЕЛЕЙ]: Используем данные из handlerOutput, чтобы нарисовать точки обнаружения
-            // Пример: painter.drawEllipse(X, Y, 4, 4);
-
-            if (isRadiationOn) painter.setPen(QPen(Qt::green, 3));
-            else painter.setPen(QPen(QColor(40, 180, 40), 3, Qt::DashLine));
+        // Отрисовка луча антенны
+        double radians = (drawAngle - 90) * PI / 180.0;
+        if (g_isSimulationRunning.load()) {
+            painter.setPen(g_isRadiationOn.load() ? QPen(Qt::green, 3) : QPen(QColor(40, 180, 40), 3, Qt::DashLine));
         } else {
             painter.setPen(QPen(QColor(110, 110, 110), 3));
         }
-
-        // Отрисовка луча
-        double radians = (currentAngle - 90) * PI / 180.0;
         painter.drawLine(cx, cy, cx + radius * std::cos(radians), cy + radius * std::sin(radians));
+
+        // [ТУТ ОТРИСОВКА ТОЧЕК ЦЕЛЕЙ НА ОСНОВЕ СКОПИРОВАННЫХ ДАННЫХ]
 
         painter.end();
         radarLabel->setPixmap(pixmap);
@@ -254,38 +264,57 @@ int main(int argc, char *argv[]) {
     timer.start(30);
     redraw();
 
-    // Логика кнопок
+    // Интерактивная привязка кнопок управления (Пишут в атомарные переменные)
     QObject::connect(simButton, &QPushButton::clicked, [&]() {
-        isSimulationRunning = !isSimulationRunning;
-        simButton->setText(isSimulationRunning ? "Стоп моделирования" : "Запуск моделирования");
+        bool nextState = !g_isSimulationRunning.load();
+        g_isSimulationRunning.store(nextState);
+        simButton->setText(nextState ? "Стоп моделирования" : "Запуск моделирования");
     });
     QObject::connect(rotationButton, &QPushButton::clicked, [&]() {
-        isRotating = !isRotating;
-        rotationButton->setText(isRotating ? "Остановить вращение" : "Запустить вращение");
+        bool nextState = !g_isRotating.load();
+        g_isRotating.store(nextState);
+        rotationButton->setText(nextState ? "Остановить вращение" : "Запустить вращение");
     });
     QObject::connect(radButton, &QPushButton::clicked, [&]() {
-        isRadiationOn = !isRadiationOn;
-        radButton->setText(isRadiationOn ? "Выключить излучение" : "Включить излучение");
+        bool nextState = !g_isRadiationOn.load();
+        g_isRadiationOn.store(nextState);
+        radButton->setText(nextState ? "Выключить излучение" : "Включить излучение");
     });
+    //QObject::connect(paramButton, &QPushButton::clicked, [&]() {
+    //    ParamDialog dialog(&window);
+    //    dialog.exec();
+    //});
 
     window.showMaximized();
     int result = app.exec();
 
-    // Освобождение памяти при закрытии
+    // Корректная остановка фонового вычислительного потока
+    g_threadShouldStop.store(true);
+    workerThread->quit();
+    workerThread->wait(); // Ждем завершения текущего такта Си-модели
+    delete workerThread;
+
+    // Освобождение динамической памяти Си-структур
     free(simOutput->SummatorData->sum_signals);
     free(simOutput->SummatorData);
     free(simOutput->AzimuthData);
     free(simOutput->TimeData);
     free(simOutput);
-
-    // free(handlerOutput);
-    // free(handlerParams);
-
-    free(simParams->imitator); free(simParams->uTime); free(simParams->azimuth);
-    free(simParams->ppPosition); free(simParams->clutterResponse); free(simParams->clutterFormation);
-    free(simParams->targetPosition); free(simParams->targetFormation); free(simParams->targetResponse);
-    free(simParams->nipPosition); free(simParams->nipLevel); free(simParams->nipFormation);
-    free(simParams->summator); free(simParams->frequencyConverter); free(simParams->noise);
+    free(simParams->imitator);
+    free(simParams->uTime);
+    free(simParams->azimuth);
+    free(simParams->ppPosition);
+    free(simParams->clutterResponse);
+    free(simParams->clutterFormation);
+    free(simParams->targetPosition);
+    free(simParams->targetFormation);
+    free(simParams->targetResponse);
+    free(simParams->nipPosition);
+    free(simParams->nipLevel);
+    free(simParams->nipFormation);
+    free(simParams->summator);
+    free(simParams->frequencyConverter);
+    free(simParams->noise);
     free(simParams);
 
     return result;
