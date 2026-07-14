@@ -40,8 +40,10 @@ jobs:
       run: |
         mkdir build
         cd build
-        qmake ../untitled.pro CONFIG+=release
-        mingw32-make -j$env:NUMBER_OF_PROCESSORS
+        # 1. Добавляем -spec win32-g++, чтобы qmake искал g++, а не cl (MSVC)
+        qmake ../untitled.pro CONFIG+=release -spec win32-g++
+        # 2. Безопасный вызов make без сложного парсинга ядер
+        mingw32-make
 
     # 4. Создание папки публикации (dist) и запуск windeployqt
     - name: Deploy Qt Dependencies
