@@ -1,0 +1,135 @@
+name: Pack Windows App on Merge
+
+# Запуск строго после слияния/прямого пуша в main
+on:
+  pull_request:
+    types: [ closed ]
+    branches: [ "main" ]
+
+jobs:
+  pack-windows:
+    runs-on: windows-latest
+    # Запускаем только если:
+    # 1. PR был успешно слит (merged)
+    # 2. У PR была метка 'release-win'
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win')
+
+    env:
+      TARGET_NAME: "untitled"           # Имя твоего бинарника
+      QT_VERSION: "6.7.2"               # Версия Qt
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 1. Установка Qt (без параметра arch, чтобы избежать падения шага)
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: ${{ env.QT_VERSION }}
+        cache: true
+
+    # 2. Скачивание rcedit для вшивания иконки radar.ico в exe
+    - name: Download rcedit
+      shell: powershell
+      run: |
+        Invoke-WebRequest -Uri "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile "rcedit.exe"
+
+    # 3. Сборка проекта через qmake (под Windows MinGW)
+    - name: Build with qmake and make
+      shell: powershell
+      run: |
+        mkdir build
+        cd build
+        # Вызываем qmake для генерации Makefile
+        qmake ../untitled.pro CONFIG+=release
+        # Собираем проект на доступных ядрах процессора
+        mingw32-make -j$env:NUMBER_OF_PROCESSORS
+
+    # 4. Создание папки публикации (dist) и запуск windeployqt
+    - name: Deploy Qt Dependencies
+      shell: powershell
+      run: |
+        $DIST_DIR = "$pwd\dist"
+        New-Item -ItemType Directory -Path $DIST_DIR
+        
+        # Находим скомпилированный exe в папке build
+        $compiled_exe = Get-ChildItem -Path "build" -Filter "${{ env.TARGET_NAME }}.exe" -Recurse | Select-Object -First 1
+        if ($null -eq $compiled_exe) { throw "Скомпилированный файл ${{ env.TARGET_NAME }}.exe не найден!" }
+        
+        # Переносим исполняемый файл в папку дистрибутива
+        Copy-Item $compiled_exe.FullName -Destination "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
+        
+        # Собираем все DLL зависимости в папку dist
+        Write-Host "Сбор зависимостей через windeployqt..."
+        windeployqt --release --compiler-runtime "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
+
+    # 5. Вшивание иконки radar.ico в исполняемый файл
+    - name: Inject Icon
+      shell: powershell
+      run: |
+        $EXE_PATH = "$pwd\dist\${{ env.TARGET_NAME }}.exe"
+        $ICON_PATH = "$pwd\radar.ico"
+        
+        if (Test-Path $ICON_PATH) {
+            Write-Host "Интеграция иконки..."
+            & ".\rcedit.exe" "$EXE_PATH" --set-icon "$ICON_PATH"
+        } else {
+            Write-Warning "Файл radar.ico не найден в корне проекта."
+        }
+
+    # 6. Автоматическая генерация скрипта Inno Setup (.iss)
+    - name: Generate Inno Setup Script
+      shell: powershell
+      run: |
+        $DIST_DIR = "$pwd\dist"
+        $ISS_FILE = "$pwd\installer.iss"
+        $ICON_PATH = "$pwd\radar.ico"
+        
+        # Определяем, использовать ли кастомную иконку для инсталлятора
+        $SetupIconLine = ""
+        if (Test-Path $ICON_PATH) {
+            $SetupIconLine = "SetupIconFile=$ICON_PATH"
+        }
+
+        # Генерируем конфигурацию скрипта установки.
+        # Инструкция Source: "dist\*" автоматически рекурсивно заберет ВСЕ 
+        # файлы и папки (плагины, библиотеки, переводы), собранные на шаге windeployqt.
+        $IssTemplate = @"
+        [Setup]
+        AppName=Radar Simulator
+        AppVersion=1.0
+        DefaultDirName={userlocalappdata}\RadarSimulator
+        DefaultGroupName=Radar Simulator
+        UninstallDisplayIcon={app}\${{ env.TARGET_NAME }}.exe
+        OutputDir=$pwd
+        OutputBaseFilename=RadarSetup
+        $SetupIconLine
+        Compression=lzma2/max
+        SolidCompression=yes
+        PrivilegesRequired=lowest
+
+        [Files]
+        Source: "$DIST_DIR\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+
+        [Icons]
+        Name: "{group}\Radar Simulator"; Filename: "{app}\${{ env.TARGET_NAME }}.exe"
+        Name: "{userdesktop}\Radar Simulator"; Filename: "{app}\${{ env.TARGET_NAME }}.exe"
+        "@
+
+        $IssTemplate | Out-File -FilePath $ISS_FILE -Encoding utf8
+        Write-Host "Файл конфигурации installer.iss успешно создан!" -ForegroundColor Green
+
+    # 7. Компиляция инсталлятора с помощью Inno Setup
+    - name: Compile Installer
+      shell: powershell
+      run: |
+        # ISCC.exe по умолчанию предустановлен на виртуалках windows-latest
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "$pwd\installer.iss"
+
+    # 8. Загрузка готового файла установщика в артефакты GitHub
+    - name: Upload Installer Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Radar-Installer-Windows
+        path: RadarSetup.exe

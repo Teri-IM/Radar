@@ -1,12 +1,14 @@
 name: Build, Iconify and Pack Radar
 
 on:
-  push:
+  pull_request:
+    types: [ closed ]
     branches: [ "main" ]
 
 jobs:
   build-and-pack:
     runs-on: windows-latest
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win') && contains(github.event.pull_request.labels.*.name, 'contained')
 
     env:
       TARGET_NAME: "untitled"           # Имя твоего бинарника (без .exe) как в твоем EVB
