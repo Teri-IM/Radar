@@ -8,23 +8,40 @@
  *
  */
 #include "ImitSummator.h"
-int Summator(struct SummatorParam *p, struct UnifedTimeOut *time, struct UTimeParam *timeP, struct TargetSignalsOut *tagret,  struct ClutterSignalsOut *pp, struct NIPSignalsOut *nip, struct NoiseGeneratorOut *noise, struct ImitSummatorOut *out){
-	if (p == NULL || timeP == NULL || tagret == NULL || pp == NULL || noise == NULL || nip == NULL || time == NULL) {
-		return 1;
-	}
+
+int Summator(
+    struct SummatorParam *p,
+    struct UnifedTimeOut *time,
+    struct UTimeParam *timeP,
+    struct TargetSignalsOut *tagret,
+    struct ClutterSignalsOut *pp,
+    struct NIPSignalsOut *nip,
+    struct NoiseGeneratorOut *noise,
+    struct ImitSummatorOut *out)
+{
+    // Быстрая проверка указателей
+    if (p == NULL || timeP == NULL || tagret == NULL || pp == NULL || noise == NULL || nip == NULL || time == NULL) {
+        return 1;
+    }
 
 
-	long long maxCnt = timeP->max_sampling_cnt;
+    if (p->enable == 1) {
+        // Кэшируем размер цикла в локальную переменную (чтобы компилятор не перечитывал структуру)
+        const int limit = time->sampling_cnt;
 
-    memset(out->sum_signals, 0, sizeof(out->sum_signals));
+        // Ключевое слово restrict сообщает компилятору, что массивы не пересекаются в памяти.
+        // Это развязывает ему руки для жесткой SIMD (AVX/SSE) оптимизации.
+        const float * restrict src_target = tagret->target_signals;
+        const float * restrict src_clutter = pp->clutter_signals;
+        const float * restrict src_noise   = noise->noise_signals;
+        const float * restrict src_nip     = nip->nip_signals;
+        float * restrict dst_sum           = out->sum_signals;
+        for (int i = 0; i < limit; i++) {
+            dst_sum[i] = src_target[i] + src_clutter[i] + src_noise[i] + src_nip[i];
+        }
+    }
 
-	if (p->enable==1){
-		for (int i = 0; i < time->sampling_cnt; i++) {
-			   out->sum_signals[i]=tagret->target_signals[i]+pp->clutter_signals[i]+noise->noise_signals[i]+nip->nip_signals[i];
-		}
-	}
-	return 0;
+    return 0;
 }
-
 
 

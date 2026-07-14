@@ -19,6 +19,9 @@
 #include <QFont>
 #include <cmath>
 
+#include <QElapsedTimer> // Добавьте этот инклюд в начало файла main.cpp
+#include <QDebug>        // Для удобного вывода в консоль Qt
+
 // Подключаем Си-интерфейсы
 extern "C" {
 #include "Imitator/Imitator.h"
@@ -166,6 +169,9 @@ int main(int argc, char *argv[]) {
     QTimer timer;
 
     auto redraw = [&]() {
+        QElapsedTimer frameTimer;
+        frameTimer.start();
+
         QSize size = radarLabel->size();
         if (size.width() < 4 || size.height() < 4) return;
 
@@ -235,6 +241,13 @@ int main(int argc, char *argv[]) {
 
         painter.end();
         radarLabel->setPixmap(pixmap);
+
+        // Фиксируем затраченное время
+        qint64 elapsedNs = frameTimer.nsecsElapsed(); // Время в наносекундах
+        double elapsedMs = elapsedNs / 1000000.0;     // Переводим в миллисекунды с точностью до плавающей точки
+
+        // Вывод в консоль отладки Qt («Вывод приложения» / «Application Output»)
+        //qDebug() << "Время генерации кадра:" << QString::number(elapsedMs, 'f', 2) << "мс";
     };
 
     QObject::connect(&timer, &QTimer::timeout, redraw);

@@ -18,7 +18,7 @@ int AzimuthSensor(struct AzimutParam *p, struct UTimeParam *timeParam, struct Un
 	}
 
 	out->azimuth_old = out->azimuth_new;
-    float increment = (p->angularVelocity * timeParam->probing_time) / 50000.0f / tickRate;
+    float increment = (p->angularVelocity * timeParam->probing_time) / 100000.0f / tickRate;
     out->azimuth_new = fmodf(out->azimuth_old + increment, 360.0f);
     return 0;
 }

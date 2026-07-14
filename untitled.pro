@@ -81,3 +81,11 @@ HEADERS  += widget.h \
     UnifiedImitatorParam.h
 
 FORMS    += widget.ui
+
+
+QMAKE_CFLAGS_RELEASE += -O3 -march=native -ftree-vectorize
+QMAKE_CXXFLAGS_RELEASE += -O3 -march=native -ftree-vectorize
+
+# Обязательно добавь и для Debug-сборки, раз ты тестируешь в ней!
+QMAKE_CFLAGS_DEBUG += -O3 -march=native -ftree-vectorize
+QMAKE_CXXFLAGS_DEBUG += -O3 -march=native -ftree-vectorize

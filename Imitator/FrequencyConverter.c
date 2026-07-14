@@ -7,20 +7,30 @@
  *
  */
 #include "FrequencyConverter.h"
-int FrequencyConverter(struct FreqConvertorParam *p, struct UnifedTimeOut *timeIn, struct ImitSummatorOut *inOut){
+#include <stddef.h> // Для NULL
 
-	if (p->enable==1){
-		if (p==NULL || timeIn == NULL || inOut==NULL){
-			return 1;
-		}
+int FrequencyConverter(struct FreqConvertorParam *p, struct UnifedTimeOut *timeIn, struct ImitSummatorOut *inOut) {
+    // 1. ИСПРАВЛЕНО: Безопасность превыше всего. Проверяем указатели ДО их разыменования!
+    if (p == NULL || timeIn == NULL || inOut == NULL) {
+        return 1;
+    }
 
-		for (int i =0; i<timeIn->sampling_cnt; i++){
-			inOut->sum_signals[i]=inOut->sum_signals[i]*2;
-		}
+    // 2. Если модуль выключен, просто выходим без тормозов
+    if (p->enable != 1) {
+        return 0;
+    }
 
+    long long count = timeIn->sampling_cnt;
 
-	}
-	return 0;
+    // 3. Локализуем массив во внутренний restrict-указатель для автовекторизации
+    float * restrict signals = inOut->sum_signals;
+
+    // 4. Оптимизированный цикл (GCC превратит его в эффективные векторные инструкции)
+    for (long long i = 0; i < count; i++) {
+        signals[i] *= 2.0f;
+    }
+
+    return 0;
 }
 
 
