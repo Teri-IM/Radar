@@ -8,11 +8,11 @@ on:
 jobs:
   pack-windows:
     runs-on: windows-latest
-    # if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win')
+    #if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win')
 
     env:
       TARGET_NAME: "untitled"           # Имя твоего бинарника
-      QT_VERSION: "6.7.2"               # Версия Qt (синхронизирована с твоей)
+      QT_VERSION: "6.7.2"               # Версия Qt
 
     steps:
     - name: Checkout repository
@@ -30,31 +30,25 @@ jobs:
         $new_path = $filtered_paths -join ';'
         echo "PATH=$new_path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-    # 2. Установка Qt (архитектура win64_mingw)
-    - name: Install Qt
+    # 2. Установка Qt и СОВМЕСТИМОГО компилятора MinGW через параметр tools
+    - name: Install Qt and MinGW Tools
       uses: jurplel/install-qt-action@v4
       with:
         version: ${{ env.QT_VERSION }}
         arch: "win64_mingw"
+        # Указываем имя утилиты и конкретный вариант через запятую
+        tools: "tools_mingw90,qt.tools.win64_mingw900"
+        add-tools-to-path: true        # Автоматически прописывает установленный GCC в PATH
         cache: true
 
-    # 3. Настройка пути к MinGW, идущему в комплекте с Qt
-    - name: Set up MinGW PATH
+    # 3. Дополнительная проверка путей к установленному MinGW
+    - name: Verify Compiler
       shell: powershell
       run: |
-        $qt_root = "${{ env.QT_ROOT_DIR }}"
-        $parent_dir = Split-Path $qt_root -Parent
-        $tools_dir = Join-Path $parent_dir "Tools"
-        
-        $mingw_bin = Get-ChildItem -Path $tools_dir -Directory -Filter "mingw*" | 
-                     Select-Object -First 1 | 
-                     ForEach-Object { Join-Path $_.FullName "bin" }
-        
-        if ($mingw_bin -and (Test-Path $mingw_bin)) {
-            echo "$mingw_bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        } else {
-            Write-Error "Compiler MinGW was not found in Qt tools directory."
-        }
+        Write-Host "Проверка версии компилятора g++:"
+        g++ --version
+        Write-Host "Проверка версии mingw32-make:"
+        mingw32-make --version
 
     # 4. Скачивание rcedit
     - name: Download rcedit
@@ -99,7 +93,6 @@ jobs:
         }
 
     # 8. Генерация скрипта Inno Setup (.iss)
-    # Здесь используется посимвольное экранирование без двойных кавычек внутри Here-String
     - name: Generate Inno Setup Script
       shell: powershell
       run: |
@@ -112,11 +105,12 @@ jobs:
             $SetupIconLine = "SetupIconFile=$ICON_PATH"
         }
 
+        # Изменено {userlocalappdata} на {localappdata}
         $IssTemplate = @"
         [Setup]
         AppName=Radar Simulator
         AppVersion=1.0
-        DefaultDirName={userlocalappdata}\RadarSimulator
+        DefaultDirName={localappdata}\RadarSimulator
         DefaultGroupName=Radar Simulator
         UninstallDisplayIcon={app}\${{ env.TARGET_NAME }}.exe
         OutputDir=$pwd
