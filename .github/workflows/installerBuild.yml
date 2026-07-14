@@ -18,7 +18,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 1. Очистка системных путей PATH от дефолтных (чужих) GCC компиляторов
+    # 1. Очистка путей от конфликтующих системных компиляторов
     - name: Clean System PATH
       shell: powershell
       run: |
