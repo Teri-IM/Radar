@@ -21,6 +21,10 @@
 
 #include <QThread>
 #include <QMutex>
+#include <QElapsedTimer>
+#include <QDebug>
+
+//#include "UI/paramdialog.h"
 
 // Подключаем Си-интерфейсы
 extern "C" {
