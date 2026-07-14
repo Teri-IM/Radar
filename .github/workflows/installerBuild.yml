@@ -26,6 +26,7 @@ jobs:
       uses: jurplel/install-qt-action@v4
       with:
         version: ${{ env.QT_VERSION }}
+        arch: "win64_mingw"
         cache: true
 
     # 2. Скачивание rcedit для вшивания иконки radar.ico в exe
