@@ -18,24 +18,17 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 1. Очистка путей от "чужих" компиляторов (GCC 15 и Strawberry Perl)
-    # Это полностью убирает ошибку "multiple definition of QtPrivate::IsFloatType_v"
-    - name: Clean System PATH from conflicting GCC compilers
+    # 1. Очистка путей от конфликтующих системных компиляторов
+    - name: Clean System PATH
       shell: powershell
       run: |
-        Write-Host "Исходный PATH:"
-        $paths = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
-        
-        # Удаляем из путей системные папки MSYS2, MinGW и Strawberry Perl, которые GitHub Actions ставит по умолчанию
         $filtered_paths = $env:PATH -split ';' | Where-Object { 
             $_ -notlike "*msys64*" -and 
             $_ -notlike "*mingw*" -and 
             $_ -notlike "*Strawberry*"
         }
-        
         $new_path = $filtered_paths -join ';'
         echo "PATH=$new_path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        Write-Host "Очищенный PATH подготовлен для шагов сборки."
 
     # 2. Установка Qt (архитектура win64_mingw)
     - name: Install Qt
@@ -45,34 +38,31 @@ jobs:
         arch: "win64_mingw"
         cache: true
 
-    # 3. Добавление "родного" MinGW из установленного Qt в приоритет PATH
+    # 3. Настройка пути к MinGW, идущему в комплекте с Qt
     - name: Set up MinGW PATH
       shell: powershell
       run: |
         $qt_root = "${{ env.QT_ROOT_DIR }}"
-        # Вычисляем путь к папке Tools, где лежит совместимый MinGW
         $parent_dir = Split-Path $qt_root -Parent
         $tools_dir = Join-Path $parent_dir "Tools"
         
-        # Ищем папку компилятора (например, mingw1120_64 или аналогичную для этой версии)
         $mingw_bin = Get-ChildItem -Path $tools_dir -Directory -Filter "mingw*" | 
                      Select-Object -First 1 | 
                      ForEach-Object { Join-Path $_.FullName "bin" }
         
         if ($mingw_bin -and (Test-Path $mingw_bin)) {
-            Write-Host "Добавляем родной MinGW в PATH: $mingw_bin" -ForegroundColor Green
             echo "$mingw_bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         } else {
-            throw "Ошибка: не удалось найти папку компилятора MinGW в каталоге инструментов Qt ($tools_dir)!"
+            Write-Error "Compiler MinGW was not found in Qt tools directory."
         }
 
-    # 4. Скачивание rcedit для вшивания иконки radar.ico в exe
+    # 4. Скачивание rcedit
     - name: Download rcedit
       shell: powershell
       run: |
         Invoke-WebRequest -Uri "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile "rcedit.exe"
 
-    # 5. Сборка проекта через qmake (используем .pro файл)
+    # 5. Сборка проекта через qmake
     - name: Build with qmake and make
       shell: powershell
       run: |
@@ -85,37 +75,31 @@ jobs:
         }
         mingw32-make
 
-    # 6. Создание папки публикации (dist) и запуск windeployqt
+    # 6. Подготовка папки публикации (dist) и сбор зависимостей
     - name: Deploy Qt Dependencies
       shell: powershell
       run: |
         $DIST_DIR = "$pwd\dist"
         New-Item -ItemType Directory -Path $DIST_DIR
         
-        # Находим скомпилированный exe в папке build
         $compiled_exe = Get-ChildItem -Path "build" -Filter "${{ env.TARGET_NAME }}.exe" -Recurse | Select-Object -First 1
-        if ($null -eq $compiled_exe) { throw "Скомпилированный файл ${{ env.TARGET_NAME }}.exe не найден!" }
+        if ($null -eq $compiled_exe) { throw "Executable file ${{ env.TARGET_NAME }}.exe was not found" }
         
         Copy-Item $compiled_exe.FullName -Destination "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
-        
-        Write-Host "Сбор зависимостей через windeployqt..."
         windeployqt --release --compiler-runtime "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
 
-    # 7. Вшивание иконки radar.ico в исполняемый файл
+    # 7. Вшивание иконки radar.ico
     - name: Inject Icon
       shell: powershell
       run: |
         $EXE_PATH = "$pwd\dist\${{ env.TARGET_NAME }}.exe"
         $ICON_PATH = "$pwd\radar.ico"
-        
         if (Test-Path $ICON_PATH) {
-            Write-Host "Интеграция иконки..."
             & ".\rcedit.exe" "$EXE_PATH" --set-icon "$ICON_PATH"
-        } else {
-            Write-Warning "Файл radar.ico не найден в корне проекта."
         }
 
-    # 8. Автоматическая генерация скрипта Inno Setup (.iss)
+    # 8. Генерация скрипта Inno Setup (.iss)
+    # Здесь используется посимвольное экранирование без двойных кавычек внутри Here-String
     - name: Generate Inno Setup Script
       shell: powershell
       run: |
@@ -151,15 +135,14 @@ jobs:
         "@
 
         $IssTemplate | Out-File -FilePath $ISS_FILE -Encoding utf8
-        Write-Host "Файл конфигурации installer.iss успешно создан!" -ForegroundColor Green
 
-    # 9. Компиляция инсталлятора с помощью Inno Setup
+    # 9. Компиляция инсталлятора
     - name: Compile Installer
       shell: powershell
       run: |
         & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "$pwd\installer.iss"
 
-    # 10. Загрузка готового файла установщика в артефакты GitHub
+    # 10. Загрузка готового установщика в артефакты GitHub
     - name: Upload Installer Artifact
       uses: actions/upload-artifact@v4
       with:
