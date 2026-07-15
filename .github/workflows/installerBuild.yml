@@ -135,6 +135,13 @@ jobs:
         Compression=lzma2/max
         SolidCompression=yes
         PrivilegesRequired=lowest
+        
+        [Tasks]
+        ; Создание иконки на рабочем столе
+        Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checked
+
+        [Run]
+        Filename: "{app}\${{ env.TARGET_NAME }}.exe"; Description: "{cm:LaunchProgram,${{ env.TARGET_NAME }}}"; Flags: nowait postinstall skipifsilent
 
         [Files]
         Source: "$DIST_DIR\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
