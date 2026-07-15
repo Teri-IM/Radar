@@ -208,8 +208,8 @@ int main(int argc, char *argv[]) {
 
     // Слой отрисовки интерфейса (Поток GUI) - срабатывает строго каждые 30 мс
     auto redraw = [&]() {
-        QElapsedTimer frameTimer;
-        frameTimer.start();
+        //QElapsedTimer frameTimer;
+        //frameTimer.start();
 
         QSize size = radarLabel->size();
         if (size.width() < 4 || size.height() < 4) return;
@@ -257,11 +257,11 @@ int main(int argc, char *argv[]) {
         radarLabel->setPixmap(pixmap);
 
         // Фиксируем затраченное время
-        qint64 elapsedNs = frameTimer.nsecsElapsed(); // Время в наносекундах
-        double elapsedMs = elapsedNs / 1000000.0;     // Переводим в миллисекунды с точностью до плавающей точки
+        //qint64 elapsedNs = frameTimer.nsecsElapsed(); // Время в наносекундах
+        //double elapsedMs = elapsedNs / 1000000.0;     // Переводим в миллисекунды с точностью до плавающей точки
 
         // Вывод в консоль отладки Qt («Вывод приложения» / «Application Output»)
-        qDebug() << "Время генерации кадра:" << QString::number(elapsedMs, 'f', 2) << "мс";
+        //qDebug() << "Время генерации кадра:" << QString::number(elapsedMs, 'f', 2) << "мс";
     };
 
     QObject::connect(&timer, &QTimer::timeout, redraw);
