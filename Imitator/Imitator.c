@@ -2,8 +2,8 @@
 #include "Imitator/UnifiedImitatorParam.h"
 #include <stdlib.h> // Для calloc и free
 #include <time.h>   // Для clock_gettime
-#define tickRate 100
-#define ENABLE_PROFILING 1
+#define tickRate 10
+#define ENABLE_PROFILING 0
 
 #if ENABLE_PROFILING
 static double get_elapsed_ms(struct timespec start, struct timespec end) {

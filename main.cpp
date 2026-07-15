@@ -261,7 +261,7 @@ int main(int argc, char *argv[]) {
         double elapsedMs = elapsedNs / 1000000.0;     // Переводим в миллисекунды с точностью до плавающей точки
 
         // Вывод в консоль отладки Qt («Вывод приложения» / «Application Output»)
-        //qDebug() << "Время генерации кадра:" << QString::number(elapsedMs, 'f', 2) << "мс";
+        qDebug() << "Время генерации кадра:" << QString::number(elapsedMs, 'f', 2) << "мс";
     };
 
     QObject::connect(&timer, &QTimer::timeout, redraw);
