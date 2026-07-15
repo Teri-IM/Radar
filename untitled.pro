@@ -19,6 +19,8 @@ SOURCES += main.cpp\
         Handler/src/nn.c \
         Handler/src/processing_module.c \
         Handler/src/suppression_NIP.c \
+        Handler/src/threshold_generator.c \
+        Handler/src/threshold_device.c \
         Imitator/AzimuthSensor.c \
         Imitator/ClutterFormationSignals.c \
         Imitator/ClutterResponse.c \
@@ -44,6 +46,7 @@ HEADERS  += widget.h \
     Handler/include/processing_module.h \
     Handler/include/processing_module_param.h \
     Handler/include/suppression_NIP.h \
+    Handler/include/threshold.h \
     Imitator/AzimuthSensor.h \
     Imitator/AzimuthSensorParam.h \
     Imitator/ClutterFormationSignals.h \
