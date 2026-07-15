@@ -47,7 +47,7 @@ typedef struct output_signal_s {
 #endif
 
 int threshold_generator (struct GlobalProcessingParam *par, struct data *in, struct Codogramm *thr);
-int threshold_device (struct data *in, struct Codogramm *thr);
+int threshold_device (struct Codogramm *in, struct Codogramm *thr);
 
 
 #ifdef __cplusplus

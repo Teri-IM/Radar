@@ -1,9 +1,9 @@
 #include "../include/codogramm.h"
 
-int former_codogramm(struct ImitOutData *in, struct data *out)
+int former_codogramm(struct Codogramm *in, struct Codogramm *out)
 {
-    *out->data.AzimuthData = *in->AzimuthData;
-    *out->data.TimeData = *in->TimeData;
-    *out->data.UAD = *in->SummatorData;
+    out->AzimuthData = in->AzimuthData;
+    out->TimeData = in->TimeData;
+    out->sign[256] = in->sign[256];
     return 0;
 }

@@ -10,16 +10,16 @@
     - Указатель на структуру порогового сигнала
     - Указатель на структуру сигнала результата обработки
 *******************************************************************************/
-int threshold_device (struct data *in, struct Codogramm *thr)
+int threshold_device (struct Codogramm *in, struct Codogramm *thr)
 {
   int i;
 
   /* Цикл обработки отсчетов. Если отсчет превышает параметр порога, то
    * занести входную структуру в структуру результата обработки */
   for (i = 0; i < 1024; i++) {
-    if (in->amplitude[i] > thr->sign[i].threshold) {
-      thr->sign[i].amplitude = in->amplitude[i];
-      thr->AzimuthData->azimuth_new = in->data.AzimuthData->azimuth_new;
+    if (in->sign[i].amplitude > thr->sign[i].threshold) {
+      thr->sign[i].amplitude = in->sign[i].amplitude;
+      thr->AzimuthData->azimuth_new = in->AzimuthData->azimuth_new;
     }
   }
   return 0;

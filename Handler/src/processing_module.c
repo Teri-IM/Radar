@@ -8,17 +8,24 @@
 
 int ProcessingModule(struct GlobalProcessingParam *Params, struct ImitOutData *Input_Sign, struct Codogramm *Output_sign)
 {
+    //struct data adc_out;
     //struct data ddc_out;
     //struct data sNIP_out;
     //struct data NN_out;
-    //struct data Final_Sign;
-    
+    //struct Codogramm threshold_generator_out;
+    //struct Codogramm threshold_device_out;
+    //struct Codogramm Final_Sign;
+     
 
     //DDC_Process(&(Params->DDC), Input_Sign, &ddc_out);
 
     //suppression_NIP(&(Params->suppression_NIP), &ddc_out, &sNIP_out);
 
     //NN_Process(&(Params->NN), &sNIP_out, &NN_out);
+
+    //threshold_generator(&(Params->threshold), &NN_out, &threshold_generator_out);
+
+    //threshold_device (&threshold_generator_out, &threshold_device_out)
 
     //former_codogramm(&NN_out, &Final_Sign);
 
