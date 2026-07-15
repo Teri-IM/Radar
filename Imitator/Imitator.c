@@ -2,6 +2,7 @@
 #include "Imitator/UnifiedImitatorParam.h"
 #include <stdlib.h> // Для calloc и free
 #include <time.h>   // Для clock_gettime
+#include <stdio.h>
 #define tickRate 10
 #define ENABLE_PROFILING 0
 
@@ -11,13 +12,65 @@ static double get_elapsed_ms(struct timespec start, struct timespec end) {
 }
 #endif
 
+static void free_imit_out_payload(struct ImitOutData *out) {
+    if (out == NULL) {
+        return;
+    }
+
+    if (out->SummatorData != NULL) {
+        free(out->SummatorData->sum_signals);
+        out->SummatorData->sum_signals = NULL;
+        free(out->SummatorData);
+        out->SummatorData = NULL;
+    }
+
+    free(out->AzimuthData);
+    out->AzimuthData = NULL;
+
+    free(out->TimeData);
+    out->TimeData = NULL;
+}
+
+int initImitOutData(struct ImitOutData *out, const struct UTimeParam *uTime) {
+    if (out == NULL || uTime == NULL) {
+        return -1;
+    }
+
+    free_imit_out_payload(out);
+
+    out->TimeData = (struct UnifedTimeOut *)calloc(1, sizeof(struct UnifedTimeOut));
+    out->AzimuthData = (struct AzimutSensorOut *)calloc(1, sizeof(struct AzimutSensorOut));
+    out->SummatorData = (struct ImitSummatorOut *)calloc(1, sizeof(struct ImitSummatorOut));
+
+    if (out->TimeData == NULL || out->AzimuthData == NULL || out->SummatorData == NULL) {
+        free_imit_out_payload(out);
+        return -1;
+    }
+
+    out->SummatorData->sum_signals = (float *)calloc(uTime->max_sampling_cnt, sizeof(float));
+    if (out->SummatorData->sum_signals == NULL) {
+        free_imit_out_payload(out);
+        return -1;
+    }
+
+    return 0;
+}
+
+void freeImitOutData(struct ImitOutData *out) {
+    free_imit_out_payload(out);
+}
 
 int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
 
     // Безопасность: проверяем, что сам указатель и критически важные подструктуры не NULL
-    if (parametrs == NULL || parametrs->uTime == NULL || parametrs->imitator == NULL) {
+    if (parametrs == NULL || parametrs->uTime == NULL || parametrs->imitator == NULL || out == NULL) {
         return -1;
     }
+
+    if (initImitOutData(out, parametrs->uTime) != 0) {
+        return -1;
+    }
+
     #if ENABLE_PROFILING
     // Переменные для накопления времени выполнения каждой функции
     double t_timeTick = 0.0, t_generateNoise = 0.0, t_AzimuthSensor = 0.0;
@@ -30,22 +83,20 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
     #endif
 
     // Инициализация выходных структур (они остаются локальными на стеке)
-    struct UnifedTimeOut unifed_time_out;
-    struct NoiseGeneratorOut noise_generator_out;
-    struct AzimutSensorOut azimuth_sensor_out;
+    struct UnifedTimeOut unifed_time_out = {0};
+    struct NoiseGeneratorOut noise_generator_out = {0};
+    struct AzimutSensorOut azimuth_sensor_out = {0};
 
-    struct PPPositionOut pp_pos_out;
-    struct ClutterResponseOut pp_find_out;
-    struct ClutterSignalsOut pp_signals_out;
+    struct PPPositionOut pp_pos_out = {0};
+    struct ClutterResponseOut pp_find_out = {0};
+    struct ClutterSignalsOut pp_signals_out = {0};
 
-    struct NIPPositionOut nip_pos_out;
-    struct NIPSignalsOut nip_formation_signals_out;
+    struct NIPPositionOut nip_pos_out = {0};
+    struct NIPSignalsOut nip_formation_signals_out = {0};
 
-    struct TargetPositionOut target_pos_out;
-    struct TargetResponseOut target_find_out;
-    struct TargetSignalsOut target_signals_out;
-
-    struct ImitSummatorOut summator_out;
+    struct TargetPositionOut target_pos_out = {0};
+    struct TargetResponseOut target_find_out = {0};
+    struct TargetSignalsOut target_signals_out = {0};
 
     // Динамическая зависимость параметров (установка времени зондирования для NIP)
     if (parametrs->nipPosition != NULL) {
@@ -66,7 +117,6 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
     pp_signals_out.clutter_signals = (float *)calloc(parametrs->uTime->max_sampling_cnt, sizeof(float));
     nip_formation_signals_out.nip_signals = (float *)calloc(parametrs->uTime->max_sampling_cnt, sizeof(float));
     target_signals_out.target_signals = (float *)calloc(parametrs->uTime->max_sampling_cnt, sizeof(float));
-    summator_out.sum_signals = (float *)calloc(parametrs->uTime->max_sampling_cnt, sizeof(float));
 
     // Выделение памяти под карты объектов и результатов
     if (parametrs->nipPosition != NULL) {
@@ -202,7 +252,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        Summator(parametrs->summator, &unifed_time_out, parametrs->uTime, &target_signals_out, &pp_signals_out, &nip_formation_signals_out, &noise_generator_out, &summator_out);
+        Summator(parametrs->summator, &unifed_time_out, parametrs->uTime, &target_signals_out, &pp_signals_out, &nip_formation_signals_out, &noise_generator_out, out->SummatorData);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_Summator += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -211,23 +261,17 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        FrequencyConverter(parametrs->frequencyConverter, &unifed_time_out, &summator_out);
+        FrequencyConverter(parametrs->frequencyConverter, &unifed_time_out, out->SummatorData);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_FreqConverter += get_elapsed_ms(s_blk, e_block);
         #endif
 
-
-        #if ENABLE_PROFILING
-        clock_gettime(CLOCK_MONOTONIC, &s_blk);
-        #endif
-        createImitatatorOutData(&summator_out, &unifed_time_out, &azimuth_sensor_out, out);
-        #if ENABLE_PROFILING
-        clock_gettime(CLOCK_MONOTONIC, &e_block); t_createOutData += get_elapsed_ms(s_blk, e_block);
-        #endif
-
     }
 
-    #if ENABLE_PROFILING
+    *out->TimeData = unifed_time_out;
+    *out->AzimuthData = azimuth_sensor_out;
+
+    #if ENABLE_PROFILING && (defined(DEBUG) || defined(_DEBUG) || defined(QT_DEBUG))
     // Вывод собранной статистики в консоль Qt
     printf("\n=================== [RLS PROFILER] ===================\n");
     printf("timeTick:              %.4f ms\n", t_timeTick);
@@ -257,7 +301,6 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
     free(pp_signals_out.clutter_signals);
     free(nip_formation_signals_out.nip_signals);
     free(target_signals_out.target_signals);
-    free(summator_out.sum_signals);
 
     if (parametrs->nipPosition != NULL) {
         free(parametrs->nipPosition->NIPMap);

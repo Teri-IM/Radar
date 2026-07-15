@@ -16,6 +16,8 @@ struct ImitOutData{
     struct ImitSummatorOut *SummatorData;
 };
 
+int initImitOutData(struct ImitOutData *out, const struct UTimeParam *uTime);
+void freeImitOutData(struct ImitOutData *out);
 int createImitatatorOutData(struct ImitSummatorOut *summator_data, struct UnifedTimeOut *time_data, struct AzimutSensorOut *azimuth_data, struct ImitOutData *out);
 int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out);
 

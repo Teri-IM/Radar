@@ -23,6 +23,7 @@
 #include <QMutex>
 #include <QElapsedTimer>
 #include <QDebug>
+#include <atomic>
 
 //#include "UI/paramdialog.h"
 
@@ -147,56 +148,126 @@ int main(int argc, char *argv[]) {
     mainLayout->addWidget(controlWidget, 1);
 
     // Выделение памяти под Си-структуры параметров
-    struct ImitatorParametrs *simParams = (struct ImitatorParametrs *)malloc(sizeof(struct ImitatorParametrs));
-    simParams->imitator = (struct ImitParam *)malloc(sizeof(struct ImitParam));
+    struct ImitatorParametrs *simParams = (struct ImitatorParametrs *)calloc(1, sizeof(struct ImitatorParametrs));
+    if (simParams == nullptr) {
+        qCritical() << "Не удалось выделить память для параметров симуляции";
+        return 1;
+    }
+
+    simParams->imitator = (struct ImitParam *)calloc(1, sizeof(struct ImitParam));
+    simParams->uTime = (struct UTimeParam *)calloc(1, sizeof(struct UTimeParam));
+    simParams->azimuth = (struct AzimutParam *)calloc(1, sizeof(struct AzimutParam));
+    simParams->ppPosition = (struct PPPosParam *)calloc(1, sizeof(struct PPPosParam));
+    simParams->clutterResponse = (struct ClutterResponseParams *)calloc(1, sizeof(struct ClutterResponseParams));
+    simParams->clutterFormation = (struct ClutterFormationParam *)calloc(1, sizeof(struct ClutterFormationParam));
+    simParams->targetPosition = (struct TargetPosParam *)calloc(1, sizeof(struct TargetPosParam));
+    simParams->targetFormation = (struct TargetFormationParam *)calloc(1, sizeof(struct TargetFormationParam));
+    simParams->targetResponse = (struct TargetResponseParams *)calloc(1, sizeof(struct TargetResponseParams));
+    simParams->nipPosition = (struct NIPPosParam *)calloc(1, sizeof(struct NIPPosParam));
+    simParams->nipLevel = (struct NIPLvlParam *)calloc(1, sizeof(struct NIPLvlParam));
+    simParams->nipFormation = (struct NIPFormationParam *)calloc(1, sizeof(struct NIPFormationParam));
+    simParams->summator = (struct SummatorParam *)calloc(1, sizeof(struct SummatorParam));
+    simParams->frequencyConverter = (struct FreqConvertorParam *)calloc(1, sizeof(struct FreqConvertorParam));
+    simParams->noise = (struct NoiseParam *)calloc(1, sizeof(struct NoiseParam));
+
+    if (simParams->imitator == nullptr || simParams->uTime == nullptr || simParams->azimuth == nullptr ||
+        simParams->ppPosition == nullptr || simParams->clutterResponse == nullptr || simParams->clutterFormation == nullptr ||
+        simParams->targetPosition == nullptr || simParams->targetFormation == nullptr || simParams->targetResponse == nullptr ||
+        simParams->nipPosition == nullptr || simParams->nipLevel == nullptr || simParams->nipFormation == nullptr ||
+        simParams->summator == nullptr || simParams->frequencyConverter == nullptr || simParams->noise == nullptr) {
+        qCritical() << "Не удалось выделить память для одной из структур параметров";
+        free(simParams->imitator);
+        free(simParams->uTime);
+        free(simParams->azimuth);
+        free(simParams->ppPosition);
+        free(simParams->clutterResponse);
+        free(simParams->clutterFormation);
+        free(simParams->targetPosition);
+        free(simParams->targetFormation);
+        free(simParams->targetResponse);
+        free(simParams->nipPosition);
+        free(simParams->nipLevel);
+        free(simParams->nipFormation);
+        free(simParams->summator);
+        free(simParams->frequencyConverter);
+        free(simParams->noise);
+        free(simParams);
+        return 1;
+    }
+
     simParams->imitator->maxDistance = 100000.0;
-    simParams->uTime = (struct UTimeParam *)malloc(sizeof(struct UTimeParam));
     simParams->uTime->probing_time = 10000;
     simParams->uTime->pulse_time = 6000;
     simParams->uTime->max_sampling_cnt = 10000000;
     simParams->uTime->sampling_rate = 2000;
-    simParams->azimuth = (struct AzimutParam *)malloc(sizeof(struct AzimutParam));
     simParams->azimuth->startAngle = 0.0;
     simParams->azimuth->angularVelocity = 10.0;
-    simParams->ppPosition = (struct PPPosParam *)malloc(sizeof(struct PPPosParam));
     simParams->ppPosition->cntPP = 3;
     simParams->ppPosition->enable = 1;
     simParams->ppPosition->PPamplitude = 500.0;
-    simParams->clutterResponse = (struct ClutterResponseParams *)malloc(sizeof(struct ClutterResponseParams));
     simParams->clutterResponse->enable = 1;
-    simParams->clutterFormation = (struct ClutterFormationParam *)malloc(sizeof(struct ClutterFormationParam));
     simParams->clutterFormation->enable = 1;
-    simParams->targetPosition = (struct TargetPosParam *)malloc(sizeof(struct TargetPosParam));
     simParams->targetPosition->cntTarget = 3;
     simParams->targetPosition->enable = 1;
     simParams->targetPosition->Targetamplitude = 1500.0;
-    simParams->targetFormation = (struct TargetFormationParam *)malloc(sizeof(struct TargetFormationParam));
     simParams->targetFormation->enable = 1;
-    simParams->targetResponse = (struct TargetResponseParams *)malloc(sizeof(struct TargetResponseParams));
     simParams->targetResponse->enable = 1;
-    simParams->nipPosition = (struct NIPPosParam *)malloc(sizeof(struct NIPPosParam));
     simParams->nipPosition->cntNIP = 3;
     simParams->nipPosition->enable = 1;
     simParams->nipPosition->NIPamplitude = 600.0;
-    simParams->nipLevel = (struct NIPLvlParam *)malloc(sizeof(struct NIPLvlParam));
     simParams->nipLevel->enable = 1;
     simParams->nipLevel->amplitudeDecrease = 10.0;
-    simParams->nipFormation = (struct NIPFormationParam *)malloc(sizeof(struct NIPFormationParam));
     simParams->nipFormation->enable = 1;
-    simParams->summator = (struct SummatorParam *)malloc(sizeof(struct SummatorParam));
     simParams->summator->enable = 1;
-    simParams->frequencyConverter = (struct FreqConvertorParam *)malloc(sizeof(struct FreqConvertorParam));
     simParams->frequencyConverter->enable = 1;
-    simParams->noise = (struct NoiseParam *)malloc(sizeof(struct NoiseParam));
     simParams->noise->enable = 0;
     simParams->noise->mean = 20;
     simParams->noise->sigma = 15;
 
-    struct ImitOutData *simOutput = (struct ImitOutData *)malloc(sizeof(struct ImitOutData));
-    simOutput->TimeData = (struct UnifedTimeOut *)calloc(1, sizeof(struct UnifedTimeOut));
-    simOutput->AzimuthData = (struct AzimutSensorOut *)calloc(1, sizeof(struct AzimutSensorOut));
-    simOutput->SummatorData = (struct ImitSummatorOut *)calloc(1, sizeof(struct ImitSummatorOut));
-    simOutput->SummatorData->sum_signals = (float *)calloc(simParams->uTime->max_sampling_cnt, sizeof(float));
+    struct ImitOutData *simOutput = (struct ImitOutData *)calloc(1, sizeof(struct ImitOutData));
+    if (simOutput == nullptr) {
+        qCritical() << "Не удалось выделить память для выходных данных симуляции";
+        free(simParams->imitator);
+        free(simParams->uTime);
+        free(simParams->azimuth);
+        free(simParams->ppPosition);
+        free(simParams->clutterResponse);
+        free(simParams->clutterFormation);
+        free(simParams->targetPosition);
+        free(simParams->targetFormation);
+        free(simParams->targetResponse);
+        free(simParams->nipPosition);
+        free(simParams->nipLevel);
+        free(simParams->nipFormation);
+        free(simParams->summator);
+        free(simParams->frequencyConverter);
+        free(simParams->noise);
+        free(simParams);
+        return 1;
+    }
+
+    if (initImitOutData(simOutput, simParams->uTime) != 0) {
+        qCritical() << "Не удалось инициализировать выходные структуры имитатора";
+        freeImitOutData(simOutput);
+        free(simOutput);
+        free(simParams->imitator);
+        free(simParams->uTime);
+        free(simParams->azimuth);
+        free(simParams->ppPosition);
+        free(simParams->clutterResponse);
+        free(simParams->clutterFormation);
+        free(simParams->targetPosition);
+        free(simParams->targetFormation);
+        free(simParams->targetResponse);
+        free(simParams->nipPosition);
+        free(simParams->nipLevel);
+        free(simParams->nipFormation);
+        free(simParams->summator);
+        free(simParams->frequencyConverter);
+        free(simParams->noise);
+        free(simParams);
+        return 1;
+    }
 
     // Инициализация и запуск вычислительного потока
     int tickRate = 10;
@@ -261,7 +332,9 @@ int main(int argc, char *argv[]) {
         double elapsedMs = elapsedNs / 1000000.0;     // Переводим в миллисекунды с точностью до плавающей точки
 
         // Вывод в консоль отладки Qt («Вывод приложения» / «Application Output»)
+#if defined(DEBUG) || defined(_DEBUG) || defined(QT_DEBUG)
         qDebug() << "Время генерации кадра:" << QString::number(elapsedMs, 'f', 2) << "мс";
+#endif
     };
 
     QObject::connect(&timer, &QTimer::timeout, redraw);
@@ -299,10 +372,7 @@ int main(int argc, char *argv[]) {
     delete workerThread;
 
     // Освобождение динамической памяти Си-структур
-    free(simOutput->SummatorData->sum_signals);
-    free(simOutput->SummatorData);
-    free(simOutput->AzimuthData);
-    free(simOutput->TimeData);
+    freeImitOutData(simOutput);
     free(simOutput);
     free(simParams->imitator);
     free(simParams->uTime);
