@@ -1,28 +1,24 @@
 #ifndef PROCESSING_MODULE_H
 #define PROCESSING_MODULE_H
 
-#include "ADC.h"
-#include "DDC.h"
-#include "codogramm.h"
-#include "suppression_NIP_param.h"
-#include "suppression_NIP.h"
-#include "nn.h"
+
 #include "processing_module_param.h"
+#include "../../Imitator/Imitator.h"
 
 
 struct Instruct
 {
-    int azimuth;
-    int time; //будет структурой
+    struct AzimutSensorOut *AzimuthData;
+    struct UnifedTimeOut *TimeData;
     int index;
-    int UAD; /*useful amount of data*/
+    struct ImitSummatorOut *UAD; /*useful amount of data*/
 };
 
 
 struct threshold_device_out
 {
     int distance;
-    int azimuth;
+    struct AzimutSensorOut *AzimuthData;
     int amplitude;
     int threshold;
     int number;
@@ -36,11 +32,12 @@ struct data
 
 struct Codogramm
 {
-    int time;
+    struct UnifedTimeOut *TimeData;
+    struct AzimutSensorOut *AzimuthData;
     int index;
     int number_of_objects;
     struct threshold_device_out sign[256];
 }; //структура, которую мы отдаем в визуал
 
-int ProcessingModule(struct GlobalProcessingParam *Params, struct data *Input_Sign, struct data *Output_sign);
+int ProcessingModule(struct GlobalProcessingParam *Params, struct ImitOutData *Input_Sign, struct Codogramm *Output_sign);
 #endif

@@ -3,11 +3,13 @@
 //
 #include "../include/DDC.h"
 
-int DDC_Process(struct GlobalProcessingParam *param, struct data *in, struct data *out)
+int DDC_Process(struct GlobalProcessingParam *param, struct ImitOutData *in, struct data *out)
 {
     if (param->DDC.enable == 1)
         {
-            *out = *in;
+            *out->data.AzimuthData = *in->AzimuthData;
+            *out->data.TimeData = *in->TimeData;
+            *out->data.UAD = *in->SummatorData;
         }   
     return 0;
 }

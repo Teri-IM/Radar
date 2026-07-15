@@ -12,6 +12,6 @@
 
 #include "processing_module.h"
 
-int adc_convert(struct GlobalProcessingParam *param, struct data *in, struct data *out);
+int adc_convert(struct GlobalProcessingParam *param, struct ImitOutData *in, struct data *out);
 
 #endif /* ADC_H_ */

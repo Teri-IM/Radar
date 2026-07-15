@@ -9,10 +9,11 @@
 
 #include "../include/ADC.h"
 
-int adc_convert(struct GlobalProcessingParam *param, struct data *in, struct data *out){
+int adc_convert(struct GlobalProcessingParam *param, struct ImitOutData *in, struct data *out){
 	if(param->ADC.enable == 1){
-		*out=*in;
-		return out;
+        *out->data.AzimuthData = *in->AzimuthData;
+        *out->data.TimeData = *in->TimeData;
+        *out->data.UAD = *in->SummatorData;
 	}
 	return 0;
 }

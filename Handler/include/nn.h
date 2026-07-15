@@ -10,6 +10,6 @@
 
 #include "processing_module.h"
 
-int NN_Process(struct GlobalProcessingParam *param, struct data *in, struct data *out);
+int NN_Process(struct GlobalProcessingParam *param, struct ImitOutData *in, struct data *out);
 
 #endif

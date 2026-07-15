@@ -8,7 +8,7 @@
 #include "processing_module_param.h"
 
 
-int DDC_Process(struct GlobalProcessingParam *param, struct data *in, struct data *out);
+int DDC_Process(struct GlobalProcessingParam *param, struct ImitOutData *in, struct data *out);
 
 
 #endif //DDC_DDC_H

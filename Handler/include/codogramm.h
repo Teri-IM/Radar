@@ -11,6 +11,6 @@
 #include "processing_module.h"
 
 
-int former_codogramm(struct data *in, struct data *out);
+int former_codogramm(struct ImitOutData *in, struct data *out);
 
 #endif
