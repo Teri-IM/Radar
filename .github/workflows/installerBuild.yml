@@ -140,7 +140,7 @@ jobs:
         DefaultGroupName=Radar Simulator
         UninstallDisplayIcon={app}\${{ env.TARGET_NAME }}.exe
         OutputDir=$pwd
-        OutputBaseFilename=RadarSetup
+        OutputBaseFilename=RadarSetup_v0.1.${{ github.run_number }}
         $SetupIconLine
         Compression=lzma2/max
         SolidCompression=yes
