@@ -149,6 +149,9 @@ jobs:
         [Files]
         Source: "$DIST_DIR\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
+        [Run]
+        Filename: "{app}\${{ env.TARGET_NAME }}.exe"; Description: "{cm:LaunchProgram,${{ env.TARGET_NAME }}}"; Flags: nowait postinstall skipifsilent
+        
         [Icons]
         Name: "{group}\Radar Simulator"; Filename: "{app}\${{ env.TARGET_NAME }}.exe"
         Name: "{userdesktop}\Radar Simulator"; Filename: "{app}\${{ env.TARGET_NAME }}.exe"
