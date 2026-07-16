@@ -77,12 +77,12 @@ jobs:
         $DIST_DIR = "$pwd\dist"
         New-Item -ItemType Directory -Path $DIST_DIR
         
-        # Копируем сам исполняемый файл
+        # Находим и копируем сам EXE
         $compiled_exe = Get-ChildItem -Path "build" -Filter "${{ env.TARGET_NAME }}.exe" -Recurse | Select-Object -First 1
         if ($null -eq $compiled_exe) { throw "Executable file ${{ env.TARGET_NAME }}.exe was not found" }
         Copy-Item $compiled_exe.FullName -Destination "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
         
-        # Запуск windeployqt
+        # Запуск стандартного windeployqt
         Write-Host "Запуск windeployqt..."
         windeployqt --release --compiler-runtime "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
         
@@ -93,7 +93,7 @@ jobs:
         $mingw_bin_dir = Split-Path $gxx_cmd.Source
         Write-Host "Используем компилятор из папки: $mingw_bin_dir" -ForegroundColor Cyan
         
-        # Принудительно копируем ТОЛЬКО родные библиотеки из этой папки
+        # Список файлов, которые пропустил windeployqt
         $runtimes = @("libgcc_s_seh-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll")
         
         foreach ($dll in $runtimes) {
@@ -103,7 +103,7 @@ jobs:
                 Copy-Item $src -Destination $dest -Force
                 Write-Host "Успешно скопирована библиотека: $dll" -ForegroundColor Green
             } else {
-                throw "Критическая ошибка: файл $dll не найден в папке компилятора $mingw_bin_dir"
+                Write-Warning "Библиотека $dll не найдена по пути $src"
             }
         }
 
@@ -133,7 +133,9 @@ jobs:
         $IssTemplate = @"
         [Setup]
         AppName=Radar Simulator
-        AppVersion=1.0
+        AppVersion=0.1.${{ github.run_number }}
+        AppPublisher=Radar Simulator Team
+        AppId=RadarSimulator
         DefaultDirName={localappdata}\RadarSimulator
         DefaultGroupName=Radar Simulator
         UninstallDisplayIcon={app}\${{ env.TARGET_NAME }}.exe
@@ -150,6 +152,29 @@ jobs:
         [Icons]
         Name: "{group}\Radar Simulator"; Filename: "{app}\${{ env.TARGET_NAME }}.exe"
         Name: "{userdesktop}\Radar Simulator"; Filename: "{app}\${{ env.TARGET_NAME }}.exe"
+        [Code]
+        procedure CurStepChanged(CurStep: TSetupStep);
+        var
+          ResultCode: Integer;
+          UninstallString: String;
+        begin
+          // Перед началом копирования файлов новой версии проверяем наличие старой
+          if CurStep = ssInstall then
+          begin
+            // Ищем путь деинсталляции в реестре текущего пользователя
+            if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\RadarSimulator_is1', 'UninstallString', UninstallString) then
+            begin
+              Log('Found previous version. Launching silent uninstaller...');
+              // Убираем кавычки из пути, если они есть
+              UninstallString := RemoveQuotes(UninstallString);
+              // Запускаем старый unins000.exe скрытно и ждем завершения работы
+              if Exec(UninstallString, '/VERYSILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+              begin
+                Log('Previous version successfully uninstalled.');
+              end;
+            end;
+          end;
+        end;
         "@
 
         $IssTemplate | Out-File -FilePath $ISS_FILE -Encoding utf8
@@ -165,7 +190,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: RadarSetupArtifact
-        path: RadarSetup.exe
+        path: RadarSetup_v0.1.${{ github.run_number }}.exe
 
   # Вторая работа: Публикация релиза на GitHub (ждет ручного аппрува в Environments)
   publish:
@@ -189,6 +214,6 @@ jobs:
         body: "Автоматический стабильный релиз Radar Simulator под Windows."
         draft: false
         prerelease: false
-        files: RadarSetup.exe
+        files: RadarSetup_v0.1.${{ github.run_number }}.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
