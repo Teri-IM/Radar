@@ -19,7 +19,6 @@ int threshold_device (struct Codogramm *in, struct Codogramm *thr)
   for (i = 0; i < 1024; i++) {
     if (in->sign[i].amplitude > thr->sign[i].threshold) {
       thr->sign[i].amplitude = in->sign[i].amplitude;
-      thr->AzimuthData->azimuth_new = in->AzimuthData->azimuth_new;
     }
   }
   return 0;

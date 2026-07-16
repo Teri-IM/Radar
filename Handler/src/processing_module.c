@@ -14,7 +14,9 @@ int ProcessingModule(struct GlobalProcessingParam *Params, struct ImitOutData *I
     //struct data NN_out;
     //struct Codogramm threshold_generator_out;
     //struct Codogramm threshold_device_out;
+    //struct Codogramm azimuth_measure;
     //struct Codogramm Final_Sign;
+    
      
 
     //DDC_Process(&(Params->DDC), Input_Sign, &ddc_out);
@@ -26,6 +28,8 @@ int ProcessingModule(struct GlobalProcessingParam *Params, struct ImitOutData *I
     //threshold_generator(&(Params->threshold), &NN_out, &threshold_generator_out);
 
     //threshold_device (&threshold_generator_out, &threshold_device_out)
+
+    //AzimuthMeasure(&threshold_device_out, &NN_out, &azimuth_measure)
 
     //former_codogramm(&NN_out, &Final_Sign);
 
