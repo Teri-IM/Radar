@@ -13,6 +13,7 @@
 #include "UnifedTime.h"
 #include "NoiseGeneratorParam.h"
 #include <math.h>
+#include <string.h>
 
 struct NoiseGeneratorOut{
     float *noise_signals;

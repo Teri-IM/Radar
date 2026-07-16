@@ -1,0 +1,35 @@
+name: Qt CI Release Build
+
+on:
+  pull_request:
+    branches: [ main, Handler, Imitator, UserInterface ] 
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Клонируем репозиторий
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Устанавливаем системные зависимости для Qt на Linux
+    - name: Install Ubuntu dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xinput0 libxcb-shape0 libxcb-xfixes0
+    # 3. Устанавливаем и кешируем Qt
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.7.2' 
+        cache: true      
+
+    # 4. Генерируем Makefile через qmake и запускаем сборку
+    - name: Run qmake and Build
+      run: |
+        mkdir build
+        cd build
+        qmake ../untitled.pro CONFIG+=release
+        make -f Makefile -j$(nproc)    
+

@@ -14,6 +14,7 @@
 #include "TargetFormationSignalsParam.h"
 #include "TargetResponse.h"
 #include "UnifiedTimeParam.h"
+#include <string.h>
 struct TargetSignalsOut{
     float *target_signals;
 };

@@ -1,0 +1,1 @@
+[![Pack and Release Windows App](https://github.com/Teri-IM/Radar/actions/workflows/installerBuild.yml/badge.svg)](https://github.com/Teri-IM/Radar/actions/workflows/installerBuild.yml)
