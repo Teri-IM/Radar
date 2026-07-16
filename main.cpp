@@ -1,11 +1,5 @@
-/*
-* Автор: Авдеев Матвей
-*
-* Наименование модуля: Основное окно радара
-*
-* Назначение: Объединение и вызов модулей, отрисовка индикатора кругового обзора,
-* контроль функций радара
-*/
+
+
 #include <QApplication>
 #include <QLabel>
 #include <QTimer>
@@ -18,6 +12,7 @@
 #include <QWidget>
 #include <QFont>
 #include <cmath>
+#include <QDebug>
 
 #include "UI/paramdialog.h"
 // Подключаем Си-интерфейсы
@@ -153,14 +148,14 @@ int main(int argc, char *argv[]) {
     // =========================================================================
     struct ImitOutData *simOutput = (struct ImitOutData *)malloc(sizeof(struct ImitOutData));
 
-    // Дополнительно выделяем память под вложенные структуры данных, если они нужны обработчику
+    // Дополнительно выделяем память под вложенные структуры данных
     simOutput->TimeData = (struct UnifedTimeOut *)calloc(1, sizeof(struct UnifedTimeOut));
     simOutput->AzimuthData = (struct AzimutSensorOut *)calloc(1, sizeof(struct AzimutSensorOut));
     simOutput->SummatorData = (struct ImitSummatorOut *)calloc(1, sizeof(struct ImitSummatorOut));
-    // Выделяем буфер под сигналы сумматора, которые считает имитатор
+    // Выделяем буфер под сигналы сумматора
     simOutput->SummatorData->sum_signals = (float *)calloc(simParams->uTime->max_sampling_cnt, sizeof(float));
 
-    // Выходные данные ОБРАБОТЧИКА (сюда запишутся отметки целей/координаты для отрисовки)
+    // Выходные данные ОБРАБОТЧИКА (закомментировано, но оставлено для будущего использования)
     // struct HandlerOutData *handlerOutput = (struct HandlerOutData *)malloc(sizeof(struct HandlerOutData));
     // struct HandlerParametrs *handlerParams = (struct HandlerParametrs *)malloc(sizeof(struct HandlerParametrs));
 
@@ -208,31 +203,31 @@ int main(int argc, char *argv[]) {
             painter.setPen(QPen(QColor(0, 80, 0), 1, Qt::DashLine));
         }
 
-        // РАБОТА С ДВИЖКАМИ МАТЕМАТИКИ И ОБРАБОТКИ
+        // РАБОТА С ИМИТАТОРОМ И ОБРАБОТЧИКОМ
         if (isSimulationRunning) {
+            // Обновляем параметры перед вызовом имитатора
             simParams->azimuth->angularVelocity = isRotating ? 10.0 : 0.0;
             simParams->targetFormation->enable = isRadiationOn ? 1 : 0;
             simParams->clutterFormation->enable = isRadiationOn ? 1 : 0;
 
-
-            // 1. Подаем 2 параметра в Имитатор (Входные настройки -> Выходной сигнал)
+            // 1. Вызываем Имитатор
             Imitator(simParams, simOutput);
-            currentAngle+=1;
 
-            // 2. Подаем 3 параметра в Обработчик (Настройки обработчика -> Сигнал из имитатора -> Результат обнаружения)
-            // Handler(handlerParams, simOutput, handlerOutput);
-
-            // Получаем угол из выходных данных имитатора
+            // 2. Обновляем угол из выходных данных
             if (simOutput->AzimuthData != nullptr) {
                 currentAngle = simOutput->AzimuthData->azimuth_new;
-                simParams->azimuth->startAngle=currentAngle;
+                simParams->azimuth->startAngle = currentAngle;
             }
 
-            // [ТУТ ОТРИСОВКА ЦЕЛЕЙ]: Используем данные из handlerOutput, чтобы нарисовать точки обнаружения
-            // Пример: painter.drawEllipse(X, Y, 4, 4);
+            // 3. Вызываем Обработчик (закомментирован, но оставлен для будущего использования)
+            // Handler(handlerParams, simOutput, handlerOutput);
 
-            if (isRadiationOn) painter.setPen(QPen(Qt::green, 3));
-            else painter.setPen(QPen(QColor(40, 180, 40), 3, Qt::DashLine));
+            // Отрисовка луча в зависимости от состояния излучения
+            if (isRadiationOn) {
+                painter.setPen(QPen(Qt::green, 3));
+            } else {
+                painter.setPen(QPen(QColor(40, 180, 40), 3, Qt::DashLine));
+            }
         } else {
             painter.setPen(QPen(QColor(110, 110, 110), 3));
         }
@@ -264,8 +259,27 @@ int main(int argc, char *argv[]) {
     });
 
     QObject::connect(paramButton, &QPushButton::clicked, [&]() {
-        ParamDialog dialog(&window); // Передаем главное окно как родителя
-        dialog.exec();               // Вызываем модально (exec заблокирует поток GUI на время настроек)
+        ParamDialog dialog(&window);
+        dialog.exec();
+
+        // Получаем параметры из диалога
+        QMap<QString, QMap<QString, QString>> params = dialog.getParameters();
+
+        // Здесь можно применить параметры к структурам имитатора
+        if (!params.isEmpty()) {
+            qDebug() << "Параметры обновлены!";
+
+            // Пример применения параметров (раскомментируйте при необходимости):
+            /*
+            if (params.contains("uTime")) {
+                auto uTimeParams = params["uTime"];
+                if (uTimeParams.contains("pulse_time")) {
+                    simParams->uTime->pulse_time = uTimeParams["pulse_time"].toLongLong();
+                }
+                // ... и так далее для всех полей
+            }
+            */
+        }
     });
 
     window.showMaximized();
