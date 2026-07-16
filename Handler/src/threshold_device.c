@@ -10,15 +10,16 @@
     - Указатель на структуру порогового сигнала
     - Указатель на структуру сигнала результата обработки
 *******************************************************************************/
-int threshold_device (struct Codogramm *in, struct Codogramm *thr)
+int threshold_device (struct data *in_nn, struct Codogramm *in, struct Codogramm *thr)
 {
   int i;
 
   /* Цикл обработки отсчетов. Если отсчет превышает параметр порога, то
    * занести входную структуру в структуру результата обработки */
   for (i = 0; i < 1024; i++) {
-    if (in->sign[i].amplitude > thr->sign[i].threshold) {
-      thr->sign[i].amplitude = in->sign[i].amplitude;
+    if (in_nn->amplitude[i] > in->sign[i].threshold) {
+      thr->sign[i].amplitude = in_nn->amplitude[i];
+      thr->sign[i].threshold = in->sign[i].threshold;
     }
   }
   return 0;
