@@ -1,11 +1,5 @@
-/*
-* Автор: Авдеев Матвей
-*
-* Наименование модуля: Основное окно радара
-*
-* Назначение: Объединение и вызов модулей, отрисовка индикатора кругового обзора,
-* контроль функций радара
-*/
+
+
 #include <QApplication>
 #include <QLabel>
 #include <QTimer>
@@ -18,18 +12,20 @@
 #include <QWidget>
 #include <QFont>
 #include <cmath>
-
+#include <QDebug>
 #include <QThread>
 #include <QMutex>
 #include <QElapsedTimer>
-#include <QDebug>
-
-//#include "UI/paramdialog.h"
-
+#include <QMap>
+#include <atomic>
+#include "UI/paramdialog.h"
 // Подключаем Си-интерфейсы
 extern "C" {
 #include "Imitator/Imitator.h"
 #include "Imitator/UnifiedImitatorParam.h"
+
+// Предполагаемый прототип вашего обработчика (подставьте ваш реальный, если имена отличаются)
+// void Handler(struct HandlerParametrs *params, struct ImitOutData *inData, struct HandlerOutData *outData);
 }
 
 // =========================================================================
@@ -127,15 +123,15 @@ int main(int argc, char *argv[]) {
     radButton->setMinimumSize(160, 44);
     radButton->setStyleSheet(buttonStyle);
 
-    //QPushButton *paramButton = new QPushButton("Настройка параметров", &window);
-    //paramButton->setMinimumSize(160, 44);
-    //paramButton->setStyleSheet("font-size: 14px; padding: 8px; color: white; background-color: #2980b9; border: 1px solid #3498db;");
+    QPushButton *paramButton = new QPushButton("Настройка параметров", &window);
+    paramButton->setMinimumSize(160, 44);
+    paramButton->setStyleSheet("font-size: 14px; padding: 8px; color: white; background-color: #2980b9; border: 1px solid #3498db;");
 
     controlLayout->addWidget(controlLabel);
     controlLayout->addWidget(simButton);
     controlLayout->addWidget(rotationButton);
     controlLayout->addWidget(radButton);
-    //controlLayout->addWidget(paramButton);
+    controlLayout->addWidget(paramButton);
     controlLayout->addStretch(1);
 
     QWidget *controlWidget = new QWidget(&window);
@@ -242,7 +238,6 @@ int main(int argc, char *argv[]) {
         // Тут забираем локальную копию карты целей для отрисовки от обработчика
         g_dataMutex.unlock();
 
-        // Отрисовка луча антенны
         double radians = (drawAngle - 90) * PI / 180.0;
         if (g_isSimulationRunning.load()) {
             painter.setPen(g_isRadiationOn.load() ? QPen(Qt::green, 3) : QPen(QColor(40, 180, 40), 3, Qt::DashLine));
@@ -265,7 +260,7 @@ int main(int argc, char *argv[]) {
     };
 
     QObject::connect(&timer, &QTimer::timeout, redraw);
-    timer.start(30);
+    timer.start(3);
     redraw();
 
     // Интерактивная привязка кнопок управления (Пишут в атомарные переменные)
@@ -288,6 +283,30 @@ int main(int argc, char *argv[]) {
     //    ParamDialog dialog(&window);
     //    dialog.exec();
     //});
+
+    QObject::connect(paramButton, &QPushButton::clicked, [&]() {
+        ParamDialog dialog(&window);
+        dialog.exec();
+
+        // Получаем параметры из диалога
+        QMap<QString, QMap<QString, QString>> params = dialog.getParameters();
+
+        // Здесь можно применить параметры к структурам имитатора
+        if (!params.isEmpty()) {
+            qDebug() << "Параметры обновлены!";
+
+            // Пример применения параметров (раскомментируйте при необходимости):
+            /*
+            if (params.contains("uTime")) {
+                auto uTimeParams = params["uTime"];
+                if (uTimeParams.contains("pulse_time")) {
+                    simParams->uTime->pulse_time = uTimeParams["pulse_time"].toLongLong();
+                }
+                // ... и так далее для всех полей
+            }
+            */
+        }
+    });
 
     window.showMaximized();
     int result = app.exec();

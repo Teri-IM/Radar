@@ -34,6 +34,7 @@ SOURCES += main.cpp\
         Imitator/TargetPosition.c \
         Imitator/TargetResponse.c \
         Imitator/UnifedTime.c \
+        UI/paramdialog.cpp \
         widget.cpp
 
 HEADERS  += widget.h \
@@ -78,6 +79,7 @@ HEADERS  += widget.h \
     Imitator/UnifedTime.h \
     Imitator/UnifiedImitatorParam.h \
     Imitator/UnifiedTimeParam.h \
+    UI/paramdialog.h \
     UnifiedImitatorParam.h
 
 FORMS    += widget.ui
