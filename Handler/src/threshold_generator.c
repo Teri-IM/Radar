@@ -1,4 +1,4 @@
-#include "threshold.h"
+#include "..\include\threshold.h"
 
 int threshold_generator (struct GlobalProcessingParam *par, struct data *in, struct Codogramm *thr)
 {
