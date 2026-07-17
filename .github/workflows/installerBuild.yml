@@ -146,6 +146,9 @@ jobs:
         SolidCompression=yes
         PrivilegesRequired=lowest
 
+        [Tasks]
+        Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+        
         [Files]
         Source: "$DIST_DIR\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
