@@ -11,8 +11,7 @@ jobs:
   build:
     runs-on: windows-latest
     if: #|
-      github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true 
-      #&& contains(github.event.pull_request.labels.*.name, 'release-win')
+      github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win')
     
     env:
       TARGET_NAME: "untitled"
