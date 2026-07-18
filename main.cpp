@@ -1,5 +1,3 @@
-
-
 #include <QApplication>
 #include <QLabel>
 #include <QTimer>
@@ -19,6 +17,7 @@
 #include <QMap>
 #include <atomic>
 #include "UI/paramdialog.h"
+#include "UI/targetformdialog.h"
 // Подключаем Си-интерфейсы
 extern "C" {
 #include "Imitator/Imitator.h"
@@ -127,11 +126,16 @@ int main(int argc, char *argv[]) {
     paramButton->setMinimumSize(160, 44);
     paramButton->setStyleSheet("font-size: 14px; padding: 8px; color: white; background-color: #2980b9; border: 1px solid #3498db;");
 
+    QPushButton *formsButton = new QPushButton("Формуляры", &window);
+    formsButton->setMinimumSize(160, 44);
+    formsButton->setStyleSheet(buttonStyle);
+
     controlLayout->addWidget(controlLabel);
     controlLayout->addWidget(simButton);
     controlLayout->addWidget(rotationButton);
     controlLayout->addWidget(radButton);
     controlLayout->addWidget(paramButton);
+    controlLayout->addWidget(formsButton);
     controlLayout->addStretch(1);
 
     QWidget *controlWidget = new QWidget(&window);
@@ -306,6 +310,11 @@ int main(int argc, char *argv[]) {
             }
             */
         }
+    });
+
+    QObject::connect(formsButton, &QPushButton::clicked, [&]() {
+        TargetFormDialog dialog(&window);
+        dialog.exec();
     });
 
     window.showMaximized();
