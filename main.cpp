@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
 
     QPushButton *formsButton = new QPushButton("Формуляры", &window);
     formsButton->setMinimumSize(160, 44);
-    formsButton->setStyleSheet(buttonStyle);
+    formsButton->setStyleSheet("font-size: 14px; padding: 8px; color: white; background-color: #2980b9; border: 1px solid #3498db;");
 
     controlLayout->addWidget(controlLabel);
     controlLayout->addWidget(simButton);
