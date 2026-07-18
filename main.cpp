@@ -55,32 +55,35 @@ public:
 protected:
     void run() override {
         while (!g_threadShouldStop.load()) {
-            if (g_isSimulationRunning.load()) {
-
-                // Синхронизируем интерактивные флаги управления перед шагом модели
-                simParams->azimuth->angularVelocity = g_isRotating.load() ? 10.0 : 0.0;
-                simParams->targetFormation->enable = g_isRadiationOn.load() ? 1 : 0;
-                simParams->clutterFormation->enable = g_isRadiationOn.load() ? 1 : 0;
-
-                // Вызов Си-имитатора (точка долгой задержки вычислений)
-                // Теперь выполняется в отдельном системном потоке!
-                Imitator(simParams, simOutput);
-
-                // Защищаем критическую секцию обновления данных для графики
-                g_dataMutex.lock();
-                if (simOutput->AzimuthData != nullptr) {
-                    g_sharedAngle = simOutput->AzimuthData->azimuth_new;
-                    simParams->azimuth->startAngle = g_sharedAngle;
-                }
-                // [ЗДЕСЬ БУДЕТ ВЫЗОВ ОБРАБОТЧИКА]:
-                // Handler(..., simOutput, ...);
-                // Копируем обнаруженные точки в g_sharedTargets под мьютексом
-                g_dataMutex.unlock();
-
-            } else {
+            if (!g_isSimulationRunning.load()) {
                 // Если симуляция на паузе, спим 5 мс, чтобы не грузить ядро процессора пустым циклом
                 msleep(5);
+                continue;
             }
+
+            // Синхронизируем интерактивные флаги управления перед шагом модели
+            simParams->azimuth->angularVelocity = g_isRotating.load() ? 10.0 : 0.0;
+            simParams->targetFormation->enable = g_isRadiationOn.load() ? 1 : 0;
+            simParams->clutterFormation->enable = g_isRadiationOn.load() ? 1 : 0;
+
+            // Вызов Си-имитатора (точка долгой задержки вычислений)
+            // Теперь выполняется в отдельном системном потоке!
+            Imitator(simParams, simOutput);
+
+            // Защищаем критическую секцию обновления данных для графики
+            g_dataMutex.lock();
+            if (simOutput->AzimuthData != nullptr) {
+                g_sharedAngle = simOutput->AzimuthData->azimuth_new;
+                simParams->azimuth->startAngle = g_sharedAngle;
+            }
+            // [ЗДЕСЬ БУДЕТ ВЫЗОВ ОБРАБОТЧИКА]:
+            // Handler(..., simOutput, ...);
+            // Копируем обнаруженные точки в g_sharedTargets под мьютексом
+            g_dataMutex.unlock();
+
+            // Небольшой сон после шага, чтобы не полностью блокировать планировщик
+            // и не "съедать" весь доступный ресурс у GUI-потока.
+            msleep(1);
         }
     }
 };
@@ -202,10 +205,20 @@ int main(int argc, char *argv[]) {
     const double PI = 3.141592653589793;
     QTimer timer;
 
-    // Слой отрисовки интерфейса (Поток GUI) - срабатывает строго каждые 30 мс
+    // Слой отрисовки интерфейса (Поток GUI) - срабатывает с разумной частотой, чтобы
+    // не перегружать старый Qt и не терять отзывчивость интерфейса.
+    QElapsedTimer frameTimer;
+    bool frameTimerInitialized = false;
     auto redraw = [&]() {
-        //QElapsedTimer frameTimer;
-        //frameTimer.start();
+        if (!frameTimerInitialized) {
+            frameTimer.start();
+            frameTimerInitialized = true;
+        }
+
+        if (frameTimer.elapsed() < 16) {
+            return;
+        }
+        frameTimer.restart();
 
         QSize size = radarLabel->size();
         if (size.width() < 4 || size.height() < 4) return;
@@ -260,7 +273,7 @@ int main(int argc, char *argv[]) {
     };
 
     QObject::connect(&timer, &QTimer::timeout, redraw);
-    timer.start(3);
+    timer.start(16);
     redraw();
 
     // Интерактивная привязка кнопок управления (Пишут в атомарные переменные)
