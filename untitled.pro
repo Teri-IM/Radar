@@ -13,12 +13,14 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp\
-        Handler/ADC.c \
-        Handler/DDC.c \
-        Handler/codogramm.c \
-        Handler/nn.c \
-        Handler/processing_module.c \
-        Handler/suppression_NIP.c \
+        Handler/src/ADC.c \
+        Handler/src/DDC.c \
+        Handler/src/codogramm.c \
+        Handler/src/nn.c \
+        Handler/src/processing_module.c \
+        Handler/src/suppression_NIP.c \
+        Handler/src/threshold_generator.c \
+        Handler/src/threshold_device.c \
         Imitator/AzimuthSensor.c \
         Imitator/ClutterFormationSignals.c \
         Imitator/ClutterResponse.c \
@@ -38,15 +40,14 @@ SOURCES += main.cpp\
         widget.cpp
 
 HEADERS  += widget.h \
-    Handler/ADC.h \
-    Handler/DDC.h \
-    Handler/DDC_param.h \
-    Handler/codogramm.h \
-    Handler/nn.h \
-    Handler/processing_module.h \
-    Handler/processing_module_param.h \
-    Handler/suppression_NIP.h \
-    Handler/suppression_NIP_Param.h \
+    Handler/include/ADC.h \
+    Handler/include/DDC.h \
+    Handler/include/codogramm.h \
+    Handler/include/nn.h \
+    Handler/include/processing_module.h \
+    Handler/include/processing_module_param.h \
+    Handler/include/suppression_NIP.h \
+    Handler/include/threshold.h \
     Imitator/AzimuthSensor.h \
     Imitator/AzimuthSensorParam.h \
     Imitator/ClutterFormationSignals.h \

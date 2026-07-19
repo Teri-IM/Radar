@@ -24,7 +24,8 @@
 extern "C" {
 #include "Imitator/Imitator.h"
 #include "Imitator/UnifiedImitatorParam.h"
-
+#include "Handler/include/processing_module.h"
+#include "Handler/include/processing_module_param.h"
 // Предполагаемый прототип вашего обработчика (подставьте ваш реальный, если имена отличаются)
 // void Handler(struct HandlerParametrs *params, struct ImitOutData *inData, struct HandlerOutData *outData);
 }
@@ -222,6 +223,10 @@ int main(int argc, char *argv[]) {
     RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput, tickRate);
     workerThread->start();
 
+    // Выходные данные ОБРАБОТЧИКА (сюда запишутся отметки целей/координаты для отрисовки)
+    struct Codogramm *handlerOutput = (struct Codogramm *)malloc(sizeof(struct Codogramm));
+    struct GlobalProcessingParam *handlerParams = (struct GlobalProcessingParam *)malloc(sizeof(struct GlobalProcessingParam));
+
     const double PI = 3.141592653589793;
     QTimer timer;
 
@@ -386,6 +391,9 @@ int main(int argc, char *argv[]) {
     free(simParams->frequencyConverter);
     free(simParams->noise);
     free(simParams);
+    
+    free(handlerOutput);
+    free(handlerParams);
 
     return result;
 }

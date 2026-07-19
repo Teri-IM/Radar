@@ -1,0 +1,26 @@
+#include "..\include\threshold.h"
+
+/*******************************************************************************
+  void threshold_device (parameters_t *par, signal_t *in, signal_t *out);
+
+  Функция, имитирующая действия порогового устройства.
+
+  Параметры:
+    - Указатель на структуру входного сигнала
+    - Указатель на структуру порогового сигнала
+    - Указатель на структуру сигнала результата обработки
+*******************************************************************************/
+int threshold_device (struct data *in_nn, struct Codogramm *in, struct Codogramm *thr)
+{
+  int i;
+
+  /* Цикл обработки отсчетов. Если отсчет превышает параметр порога, то
+   * занести входную структуру в структуру результата обработки */
+  for (i = 0; i < 1024; i++) {
+    if (in_nn->amplitude[i] > in->sign[i].threshold) {
+      thr->sign[i].amplitude = in_nn->amplitude[i];
+      thr->sign[i].threshold = in->sign[i].threshold;
+    }
+  }
+  return 0;
+}
