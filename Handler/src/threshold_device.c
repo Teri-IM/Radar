@@ -16,7 +16,7 @@ int threshold_device (struct data *in_nn, struct Codogramm *in, struct Codogramm
 
   /* Цикл обработки отсчетов. Если отсчет превышает параметр порога, то
    * занести входную структуру в структуру результата обработки */
-  for (i = 0; i < 1024; i++) {
+  for (i = 0; i < 256; i++) {
     if (in_nn->amplitude[i] > in->sign[i].threshold) {
       thr->sign[i].amplitude = in_nn->amplitude[i];
       thr->sign[i].threshold = in->sign[i].threshold;
