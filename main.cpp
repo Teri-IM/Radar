@@ -27,7 +27,7 @@ extern "C" {
 #include "Handler/include/processing_module_param.h"
 }
 
-namespace {
+namespace RADAR {
 constexpr double kPi = 3.141592653589793;
 constexpr int kFrameIntervalMs = 16;
 constexpr int kWorkerPauseMs = 5;
@@ -43,6 +43,7 @@ struct SharedTargetPoint {
 struct SharedRuntimeState {
     QMutex mutex;
     double sharedAngle = 0.0;
+    double maxRadarDistance = 100000.0; // Храним копию тут, чтобы GUI не лез в ресурсы Си!
     std::vector<SharedTargetPoint> sharedTargets;
     std::atomic<bool> isSimulationRunning{false};
     std::atomic<bool> isRotating{true};
@@ -61,9 +62,7 @@ struct SimulationResources {
 void cleanupSimulationResources(SimulationResources &resources);
 
 void initializeSimulatorParameters(struct ImitatorParametrs *simParams) {
-    if (simParams == nullptr) {
-        return;
-    }
+    if (simParams == nullptr) return;
 
     simParams->imitator = static_cast<struct ImitParam *>(calloc(1, sizeof(struct ImitParam)));
     if (simParams->imitator != nullptr) {
@@ -156,9 +155,7 @@ void initializeSimulatorParameters(struct ImitatorParametrs *simParams) {
 
 bool initializeSimulationResources(SimulationResources &resources) {
     resources.simParams = static_cast<struct ImitatorParametrs *>(malloc(sizeof(struct ImitatorParametrs)));
-    if (resources.simParams == nullptr) {
-        return false;
-    }
+    if (resources.simParams == nullptr) return false;
 
     initializeSimulatorParameters(resources.simParams);
 
@@ -199,11 +196,11 @@ bool initializeSimulationResources(SimulationResources &resources) {
     }
 
     resources.handlerParams->threshold.threshold = 100;
-    resources.handlerParams->threshold.enable = true;
-    resources.handlerParams->ADC.enable = true;
-    resources.handlerParams->DDC.enable = true;
-    resources.handlerParams->NN.enable = true;
-    resources.handlerParams->suppression_NIP.enable = true;
+    resources.handlerParams->threshold.enable = 1;
+    resources.handlerParams->ADC.enable = 1;
+    resources.handlerParams->DDC.enable = 1;
+    resources.handlerParams->NN.enable = 1;
+    resources.handlerParams->suppression_NIP.enable = 1;
 
     return true;
 }
@@ -255,10 +252,9 @@ void cleanupSimulationResources(SimulationResources &resources) {
     resources.handlerOutput = nullptr;
 }
 
-void drawRadarScene(QPainter &painter, const QSize &size, const SharedRuntimeState &state, const SimulationResources &resources) {
-    if (size.width() < 4 || size.height() < 4) {
-        return;
-    }
+// Теперь функция принимает только state_ и не трогает ресурсы Си-модели в GUI потоке!
+void drawRadarScene(QPainter &painter, const QSize &size, const SharedRuntimeState &state) {
+    if (size.width() < 4 || size.height() < 4) return;
 
     int cx = size.width() / 2;
     int cy = size.height() / 2;
@@ -287,7 +283,7 @@ void drawRadarScene(QPainter &painter, const QSize &size, const SharedRuntimeSta
     painter.setBrush(QBrush(QColor(255, 80, 80)));
     for (const auto &target : state.sharedTargets) {
         double targetAngleRad = (target.angle - 90.0) * kPi / 180.0;
-        double normalizedDistance = target.distance / std::max(1.0, resources.simParams != nullptr && resources.simParams->imitator != nullptr ? resources.simParams->imitator->maxDistance : 1.0);
+        double normalizedDistance = target.distance / std::max(1.0, state.maxRadarDistance);
         normalizedDistance = std::max(0.0, std::min(1.0, normalizedDistance));
         int tx = cx + static_cast<int>(radius * normalizedDistance * std::cos(targetAngleRad));
         int ty = cy + static_cast<int>(radius * normalizedDistance * std::sin(targetAngleRad));
@@ -326,6 +322,10 @@ protected:
                 if (simParams->clutterFormation != nullptr) {
                     simParams->clutterFormation->enable = state_.isRadiationOn.load() ? 1 : 0;
                 }
+                // На всякий случай синхронизируем актуальную дальность, если её поменяют
+                if (simParams->imitator != nullptr) {
+                    state_.maxRadarDistance = simParams->imitator->maxDistance;
+                }
             }
 
             if (Imitator(simParams, simOutput) != 0) {
@@ -343,8 +343,7 @@ protected:
                 simParams->azimuth->startAngle = state_.sharedAngle;
 
                 state_.sharedTargets.clear();
-                if (resources_.handlerOutput != nullptr && resources_.handlerOutput->number_of_objects > 0 &&
-                    resources_.handlerOutput->sign != nullptr) {
+                if (resources_.handlerOutput != nullptr && resources_.handlerOutput->number_of_objects > 0) {
                     for (int i = 0; i < resources_.handlerOutput->number_of_objects; ++i) {
                         const struct threshold_device_out &target = resources_.handlerOutput->sign[i];
                         if (target.amplitude > 0 && target.AzimuthData != nullptr) {
@@ -416,20 +415,25 @@ int main(int argc, char *argv[]) {
 
     QWidget *controlWidget = new QWidget(&window);
     controlWidget->setLayout(controlLayout);
-    controlWidget->setMinimumWidth(kControlPanelWidth);
+    controlWidget->setMinimumWidth(RADAR::kControlPanelWidth);
     controlWidget->setStyleSheet("background-color: #101010; border: 1px solid #2a2a2a;");
 
     mainLayout->addWidget(radarLabel, 3);
     mainLayout->addWidget(controlWidget, 1);
 
-    SharedRuntimeState runtimeState;
-    SimulationResources resources;
+    RADAR::SharedRuntimeState runtimeState;
+    RADAR::SimulationResources resources;
     if (!initializeSimulationResources(resources)) {
         qDebug() << "Не удалось инициализировать ресурсы моделирования";
         return 1;
     }
+    
+    // Передаем начальное значение дальности Си-модели в состояние синхронизации
+    if (resources.simParams != nullptr && resources.simParams->imitator != nullptr) {
+        runtimeState.maxRadarDistance = resources.simParams->imitator->maxDistance;
+    }
 
-    RadarComputeWorker workerThread(resources, runtimeState);
+    RADAR::RadarComputeWorker workerThread(resources, runtimeState);
     workerThread.start();
 
     QTimer timer;
@@ -442,15 +446,13 @@ int main(int argc, char *argv[]) {
             frameTimerInitialized = true;
         }
 
-        if (frameTimer.elapsed() < kFrameIntervalMs) {
+        if (frameTimer.elapsed() < RADAR::kFrameIntervalMs) {
             return;
         }
         frameTimer.restart();
 
         QSize size = radarLabel->size();
-        if (size.width() < 4 || size.height() < 4) {
-            return;
-        }
+        if (size.width() < 4 || size.height() < 4) return;
 
         QPixmap pixmap(size.width(), size.height());
         pixmap.fill(Qt::transparent);
@@ -460,7 +462,8 @@ int main(int argc, char *argv[]) {
 
         {
             QMutexLocker locker(&runtimeState.mutex);
-            drawRadarScene(painter, size, runtimeState, resources);
+            // drawRadarScene теперь абсолютно изолирована от структур ресурсов Си-модели!
+            drawRadarScene(painter, size, runtimeState);
         }
 
         painter.end();
@@ -468,7 +471,7 @@ int main(int argc, char *argv[]) {
     };
 
     QObject::connect(&timer, &QTimer::timeout, redraw);
-    timer.start(kFrameIntervalMs);
+    timer.start(RADAR::kFrameIntervalMs);
     redraw();
 
     QObject::connect(simButton, &QPushButton::clicked, [&]() {
@@ -480,7 +483,7 @@ int main(int argc, char *argv[]) {
     QObject::connect(rotationButton, &QPushButton::clicked, [&]() {
         bool nextState = !runtimeState.isRotating.load();
         runtimeState.isRotating.store(nextState);
-        rotationButton->setText(nextState ? "Остановить вращение" : "Запустить вращение");
+        rotationButton->setText(nextState ? "Запустить вращение" : "Остановить вращение");
     });
 
     QObject::connect(radButton, &QPushButton::clicked, [&]() {
@@ -496,15 +499,36 @@ int main(int argc, char *argv[]) {
         QMap<QString, QMap<QString, QString>> params = dialog.getParameters();
         if (!params.isEmpty()) {
             qDebug() << "Параметры обновлены!";
+            
+            runtimeState.blockComputation.store(true);
+            {
+                QMutexLocker locker(&runtimeState.mutex);
+                if (params.contains("uTime")) {
+                    auto uTimeParams = params["uTime"];
+                    if (uTimeParams.contains("pulse_time") && resources.simParams != nullptr && resources.simParams->uTime != nullptr) {
+                        resources.simParams->uTime->pulse_time = uTimeParams["pulse_time"].toLongLong();
+                    }
+                }
+                // Синхронизируем maxDistance, если он менялся в диалоге
+                if (resources.simParams != nullptr && resources.simParams->imitator != nullptr) {
+                    runtimeState.maxRadarDistance = resources.simParams->imitator->maxDistance;
+                }
+            }
+            runtimeState.blockComputation.store(false);
         }
     });
 
     window.showMaximized();
     int result = app.exec();
 
+    // --- НАДЕЖНЫЙ ПОРЯДОК ОСТАНОВКИ ПОТОКА ---
+    // Сначала жестко выставляем флаги остановки
     runtimeState.threadShouldStop.store(true);
+    runtimeState.blockComputation.store(false); // Выводим из возможного лока блока
+    
+    // Будим поток, если он застрял, и корректно дожидаемся выхода из run()
     workerThread.quit();
-    workerThread.wait();
+    workerThread.wait(); // Стек main() гарантированно не разрушится, пока поток активен
 
     cleanupSimulationResources(resources);
     return result;
