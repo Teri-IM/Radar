@@ -58,68 +58,100 @@ struct SimulationResources {
     struct Codogramm *handlerOutput = nullptr;
 };
 
+void cleanupSimulationResources(SimulationResources &resources);
+
 void initializeSimulatorParameters(struct ImitatorParametrs *simParams) {
     if (simParams == nullptr) {
         return;
     }
 
-    simParams->imitator = static_cast<struct ImitParam *>(malloc(sizeof(struct ImitParam)));
-    simParams->imitator->maxDistance = 100000.0;
+    simParams->imitator = static_cast<struct ImitParam *>(calloc(1, sizeof(struct ImitParam)));
+    if (simParams->imitator != nullptr) {
+        simParams->imitator->maxDistance = 100000.0;
+    }
 
-    simParams->uTime = static_cast<struct UTimeParam *>(malloc(sizeof(struct UTimeParam)));
-    simParams->uTime->probing_time = 10000;
-    simParams->uTime->pulse_time = 6000;
-    simParams->uTime->max_sampling_cnt = 10000000;
-    simParams->uTime->sampling_rate = 2000;
+    simParams->uTime = static_cast<struct UTimeParam *>(calloc(1, sizeof(struct UTimeParam)));
+    if (simParams->uTime != nullptr) {
+        simParams->uTime->probing_time = 10000;
+        simParams->uTime->pulse_time = 6000;
+        simParams->uTime->max_sampling_cnt = 10000000;
+        simParams->uTime->sampling_rate = 2000;
+    }
 
-    simParams->azimuth = static_cast<struct AzimutParam *>(malloc(sizeof(struct AzimutParam)));
-    simParams->azimuth->startAngle = 0.0;
-    simParams->azimuth->angularVelocity = 10.0;
+    simParams->azimuth = static_cast<struct AzimutParam *>(calloc(1, sizeof(struct AzimutParam)));
+    if (simParams->azimuth != nullptr) {
+        simParams->azimuth->startAngle = 0.0;
+        simParams->azimuth->angularVelocity = 10.0;
+    }
 
-    simParams->ppPosition = static_cast<struct PPPosParam *>(malloc(sizeof(struct PPPosParam)));
-    simParams->ppPosition->cntPP = 3;
-    simParams->ppPosition->enable = 1;
-    simParams->ppPosition->PPamplitude = 500.0;
+    simParams->ppPosition = static_cast<struct PPPosParam *>(calloc(1, sizeof(struct PPPosParam)));
+    if (simParams->ppPosition != nullptr) {
+        simParams->ppPosition->cntPP = 3;
+        simParams->ppPosition->enable = 1;
+        simParams->ppPosition->PPamplitude = 500.0;
+    }
 
-    simParams->clutterResponse = static_cast<struct ClutterResponseParams *>(malloc(sizeof(struct ClutterResponseParams)));
-    simParams->clutterResponse->enable = 1;
+    simParams->clutterResponse = static_cast<struct ClutterResponseParams *>(calloc(1, sizeof(struct ClutterResponseParams)));
+    if (simParams->clutterResponse != nullptr) {
+        simParams->clutterResponse->enable = 1;
+    }
 
-    simParams->clutterFormation = static_cast<struct ClutterFormationParam *>(malloc(sizeof(struct ClutterFormationParam)));
-    simParams->clutterFormation->enable = 1;
+    simParams->clutterFormation = static_cast<struct ClutterFormationParam *>(calloc(1, sizeof(struct ClutterFormationParam)));
+    if (simParams->clutterFormation != nullptr) {
+        simParams->clutterFormation->enable = 1;
+    }
 
-    simParams->targetPosition = static_cast<struct TargetPosParam *>(malloc(sizeof(struct TargetPosParam)));
-    simParams->targetPosition->cntTarget = 3;
-    simParams->targetPosition->enable = 1;
-    simParams->targetPosition->Targetamplitude = 1500.0;
+    simParams->targetPosition = static_cast<struct TargetPosParam *>(calloc(1, sizeof(struct TargetPosParam)));
+    if (simParams->targetPosition != nullptr) {
+        simParams->targetPosition->cntTarget = 3;
+        simParams->targetPosition->enable = 1;
+        simParams->targetPosition->Targetamplitude = 1500.0;
+    }
 
-    simParams->targetFormation = static_cast<struct TargetFormationParam *>(malloc(sizeof(struct TargetFormationParam)));
-    simParams->targetFormation->enable = 1;
+    simParams->targetFormation = static_cast<struct TargetFormationParam *>(calloc(1, sizeof(struct TargetFormationParam)));
+    if (simParams->targetFormation != nullptr) {
+        simParams->targetFormation->enable = 1;
+    }
 
-    simParams->targetResponse = static_cast<struct TargetResponseParams *>(malloc(sizeof(struct TargetResponseParams)));
-    simParams->targetResponse->enable = 1;
+    simParams->targetResponse = static_cast<struct TargetResponseParams *>(calloc(1, sizeof(struct TargetResponseParams)));
+    if (simParams->targetResponse != nullptr) {
+        simParams->targetResponse->enable = 1;
+    }
 
-    simParams->nipPosition = static_cast<struct NIPPosParam *>(malloc(sizeof(struct NIPPosParam)));
-    simParams->nipPosition->cntNIP = 3;
-    simParams->nipPosition->enable = 1;
-    simParams->nipPosition->NIPamplitude = 600.0;
+    simParams->nipPosition = static_cast<struct NIPPosParam *>(calloc(1, sizeof(struct NIPPosParam)));
+    if (simParams->nipPosition != nullptr) {
+        simParams->nipPosition->cntNIP = 3;
+        simParams->nipPosition->enable = 1;
+        simParams->nipPosition->NIPamplitude = 600.0;
+    }
 
-    simParams->nipLevel = static_cast<struct NIPLvlParam *>(malloc(sizeof(struct NIPLvlParam)));
-    simParams->nipLevel->enable = 1;
-    simParams->nipLevel->amplitudeDecrease = 10.0;
+    simParams->nipLevel = static_cast<struct NIPLvlParam *>(calloc(1, sizeof(struct NIPLvlParam)));
+    if (simParams->nipLevel != nullptr) {
+        simParams->nipLevel->enable = 1;
+        simParams->nipLevel->amplitudeDecrease = 10.0;
+    }
 
-    simParams->nipFormation = static_cast<struct NIPFormationParam *>(malloc(sizeof(struct NIPFormationParam)));
-    simParams->nipFormation->enable = 1;
+    simParams->nipFormation = static_cast<struct NIPFormationParam *>(calloc(1, sizeof(struct NIPFormationParam)));
+    if (simParams->nipFormation != nullptr) {
+        simParams->nipFormation->enable = 1;
+    }
 
-    simParams->summator = static_cast<struct SummatorParam *>(malloc(sizeof(struct SummatorParam)));
-    simParams->summator->enable = 1;
+    simParams->summator = static_cast<struct SummatorParam *>(calloc(1, sizeof(struct SummatorParam)));
+    if (simParams->summator != nullptr) {
+        simParams->summator->enable = 1;
+    }
 
-    simParams->frequencyConverter = static_cast<struct FreqConvertorParam *>(malloc(sizeof(struct FreqConvertorParam)));
-    simParams->frequencyConverter->enable = 1;
+    simParams->frequencyConverter = static_cast<struct FreqConvertorParam *>(calloc(1, sizeof(struct FreqConvertorParam)));
+    if (simParams->frequencyConverter != nullptr) {
+        simParams->frequencyConverter->enable = 1;
+    }
 
-    simParams->noise = static_cast<struct NoiseParam *>(malloc(sizeof(struct NoiseParam)));
-    simParams->noise->enable = 0;
-    simParams->noise->mean = 20;
-    simParams->noise->sigma = 15;
+    simParams->noise = static_cast<struct NoiseParam *>(calloc(1, sizeof(struct NoiseParam)));
+    if (simParams->noise != nullptr) {
+        simParams->noise->enable = 0;
+        simParams->noise->mean = 20;
+        simParams->noise->sigma = 15;
+    }
 }
 
 bool initializeSimulationResources(SimulationResources &resources) {
@@ -276,29 +308,43 @@ protected:
                 continue;
             }
 
-            {
-                QMutexLocker locker(&state_.mutex);
-                resources_.simParams->azimuth->angularVelocity = state_.isRotating.load() ? 10.0 : 0.0;
-                resources_.simParams->targetFormation->enable = state_.isRadiationOn.load() ? 1 : 0;
-                resources_.simParams->clutterFormation->enable = state_.isRadiationOn.load() ? 1 : 0;
+            auto *simParams = resources_.simParams;
+            auto *simOutput = resources_.simOutput;
+            if (simParams == nullptr || simOutput == nullptr || simParams->azimuth == nullptr ||
+                simOutput->AzimuthData == nullptr || simOutput->TimeData == nullptr ||
+                simOutput->SummatorData == nullptr) {
+                msleep(10);
+                continue;
             }
 
-            Imitator(resources_.simParams, resources_.simOutput);
+            {
+                QMutexLocker locker(&state_.mutex);
+                simParams->azimuth->angularVelocity = state_.isRotating.load() ? 10.0 : 0.0;
+                if (simParams->targetFormation != nullptr) {
+                    simParams->targetFormation->enable = state_.isRadiationOn.load() ? 1 : 0;
+                }
+                if (simParams->clutterFormation != nullptr) {
+                    simParams->clutterFormation->enable = state_.isRadiationOn.load() ? 1 : 0;
+                }
+            }
+
+            if (Imitator(simParams, simOutput) != 0) {
+                msleep(kWorkerPauseMs);
+                continue;
+            }
 
             if (resources_.handlerParams != nullptr && resources_.handlerOutput != nullptr) {
-                ProcessingModule(resources_.handlerParams, resources_.simOutput, resources_.handlerOutput);
+                ProcessingModule(resources_.handlerParams, simOutput, resources_.handlerOutput);
             }
 
             {
                 QMutexLocker locker(&state_.mutex);
-                if (resources_.simOutput != nullptr && resources_.simOutput->AzimuthData != nullptr &&
-                    resources_.simParams != nullptr && resources_.simParams->azimuth != nullptr) {
-                    state_.sharedAngle = resources_.simOutput->AzimuthData->azimuth_new;
-                    resources_.simParams->azimuth->startAngle = state_.sharedAngle;
-                }
+                state_.sharedAngle = simOutput->AzimuthData->azimuth_new;
+                simParams->azimuth->startAngle = state_.sharedAngle;
 
                 state_.sharedTargets.clear();
-                if (resources_.handlerOutput != nullptr && resources_.handlerOutput->number_of_objects > 0) {
+                if (resources_.handlerOutput != nullptr && resources_.handlerOutput->number_of_objects > 0 &&
+                    resources_.handlerOutput->sign != nullptr) {
                     for (int i = 0; i < resources_.handlerOutput->number_of_objects; ++i) {
                         const struct threshold_device_out &target = resources_.handlerOutput->sign[i];
                         if (target.amplitude > 0 && target.AzimuthData != nullptr) {
