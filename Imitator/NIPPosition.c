@@ -17,10 +17,10 @@ int createNipMap(struct NIPPosParam *p, struct ImitParam *imP){
 
 		for(int i = 0; i<p->cntNIP; i++){
 			p->NIPMap[i].angle=((float)rand() / (float)RAND_MAX)*360.0f;
-			p->NIPMap[i].distance=1.0f + (((float)rand() / (float)RAND_MAX+1.0f)*(imP->maxDistance-1.0f));
+            p->NIPMap[i].distance=1.0f + (((float)rand() / (float)RAND_MAX)*(imP->maxDistance-1.0f));
 			p->NIPMap[i].NIPprobing_time=(long long)(rand()%p->MaxNIP_probingTime);
 		}
-	}else{
+    }else{
 
 		for(int i = 0; i<p->cntNIP; i++){
 			p->NIPMap[i].angle=0;
