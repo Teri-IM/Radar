@@ -1,37 +1,37 @@
 #include "../include/processing_module.h"
 #include "../include/processing_module_param.h"
-#include "../include/ADC.h"
+//#include "../include/ADC.h"
 #include "../include/DDC.h"
 #include "../include/codogramm.h"
 #include "../include/suppression_NIP.h"
 #include "../include/nn.h"
+#include "Handler/include/threshold.h"
 
 int ProcessingModule(struct GlobalProcessingParam *Params, struct ImitOutData *Input_Sign, struct Codogramm *Output_sign)
 {
     //struct data adc_out;
-    //struct data ddc_out;
-    //struct data sNIP_out;
-    //struct data NN_out;
-    //struct Codogramm threshold_generator_out;
-    //struct Codogramm threshold_device_out;
-    //struct Codogramm azimuth_measure;
-    //struct Codogramm Final_Sign;
+    struct data ddc_out;
+    struct data sNIP_out;
+    struct data NN_out;
+    struct Codogramm threshold_generator_out;
+    struct Codogramm threshold_device_out;
+    struct Codogramm Final_Sign;
     
      
 
-    //DDC_Process(&(Params->DDC), Input_Sign, &ddc_out);
+    DDC_Process(Params, Input_Sign, &ddc_out);
 
-    //suppression_NIP(&(Params->suppression_NIP), &ddc_out, &sNIP_out);
+    suppression_NIP(Params, &ddc_out, &sNIP_out);
 
-    //NN_Process(&(Params->NN), &sNIP_out, &NN_out);
+    NN_Process(Params, &sNIP_out, &NN_out);
 
-    //threshold_generator(&(Params->threshold), &NN_out, &threshold_generator_out);
+    threshold_generator(Params, &NN_out, &threshold_generator_out);
 
-    //threshold_device (&threshold_generator_out, &threshold_device_out)
+    threshold_device(&NN_out, &threshold_generator_out, &threshold_device_out);
 
-    //AzimuthMeasure(&threshold_device_out, &NN_out, &azimuth_measure)
+    //AzimuthSensor(&threshold_device_out, &NN_out, &azimuth_measure);
 
-    //former_codogramm(&NN_out, &Final_Sign);
+    former_codogramm(&threshold_device_out, &Final_Sign);
 
     Output_sign->TimeData = Input_Sign->TimeData;
     Output_sign->AzimuthData = Input_Sign->AzimuthData;
@@ -46,7 +46,7 @@ int ProcessingModule(struct GlobalProcessingParam *Params, struct ImitOutData *I
     int count = Input_Sign->TargetPositionData->cntTarget;
 
     for (int i = 0; i < count && Output_sign->number_of_objects < 256; ++i) {
-        const struct Point &target = Input_Sign->TargetPositionData->Target_map[i];
+        struct Point target = Input_Sign->TargetPositionData->Target_map[i];
         if (target.amplitude <= 0.0f) {
             continue;
         }
