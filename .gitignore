@@ -1,4 +1,4 @@
-/build
-/.qtcreator
-*/*.pro.user
-*.pro.user
+build
+.qtcreator
+*.pro.*
+*.user
