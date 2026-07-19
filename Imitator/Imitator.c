@@ -29,10 +29,15 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
     struct timespec s_blk, e_block;
     #endif
 
-    // Инициализация выходных структур (они остаются локальными на стеке)
-    struct UnifedTimeOut unifed_time_out;
+    // Проверка внешних выходных буферов
+    if (out == NULL || out->TimeData == NULL || out->AzimuthData == NULL || out->SummatorData == NULL || out->SummatorData->sum_signals == NULL) {
+        return -1;
+    }
+
+    struct UnifedTimeOut *unifed_time_out = out->TimeData;
     struct NoiseGeneratorOut noise_generator_out;
-    struct AzimutSensorOut azimuth_sensor_out;
+    struct AzimutSensorOut *azimuth_sensor_out = out->AzimuthData;
+    struct ImitSummatorOut *summator_out = out->SummatorData;
 
     struct PPPositionOut pp_pos_out;
     struct ClutterResponseOut pp_find_out;
@@ -45,20 +50,18 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
     struct TargetResponseOut target_find_out;
     struct TargetSignalsOut target_signals_out;
 
-    struct ImitSummatorOut summator_out;
-
     // Динамическая зависимость параметров (установка времени зондирования для NIP)
     if (parametrs->nipPosition != NULL) {
         parametrs->nipPosition->MaxNIP_probingTime = parametrs->uTime->probing_time;
     }
 
     // Прединициализация выходных данных
-    clock_gettime(CLOCK_MONOTONIC, &unifed_time_out.start_time);
-    unifed_time_out.sampling_cnt = (parametrs->uTime->probing_time - parametrs->uTime->pulse_time) * parametrs->uTime->sampling_rate;
+    clock_gettime(CLOCK_MONOTONIC, &unifed_time_out->start_time);
+    unifed_time_out->sampling_cnt = (parametrs->uTime->probing_time - parametrs->uTime->pulse_time) * parametrs->uTime->sampling_rate;
 
     if (parametrs->azimuth != NULL) {
-        azimuth_sensor_out.angularVelocity = parametrs->azimuth->angularVelocity;
-        azimuth_sensor_out.azimuth_new = parametrs->azimuth->startAngle;
+        azimuth_sensor_out->angularVelocity = parametrs->azimuth->angularVelocity;
+        azimuth_sensor_out->azimuth_new = parametrs->azimuth->startAngle;
     }
 
     // Выделение памяти под сигнальные массивы
@@ -66,7 +69,6 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
     pp_signals_out.clutter_signals = (float *)calloc(parametrs->uTime->max_sampling_cnt, sizeof(float));
     nip_formation_signals_out.nip_signals = (float *)calloc(parametrs->uTime->max_sampling_cnt, sizeof(float));
     target_signals_out.target_signals = (float *)calloc(parametrs->uTime->max_sampling_cnt, sizeof(float));
-    summator_out.sum_signals = (float *)calloc(parametrs->uTime->max_sampling_cnt, sizeof(float));
 
     // Выделение памяти под карты объектов и результатов
     if (parametrs->nipPosition != NULL) {
@@ -112,7 +114,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        timeTick(parametrs->uTime, &unifed_time_out);
+        timeTick(parametrs->uTime, unifed_time_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_timeTick += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -121,7 +123,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        generateNoise(parametrs->noise, &unifed_time_out, &noise_generator_out);
+        generateNoise(parametrs->noise, unifed_time_out, &noise_generator_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_generateNoise += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -130,7 +132,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        AzimuthSensor(parametrs->azimuth, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, tickRate);
+        AzimuthSensor(parametrs->azimuth, parametrs->uTime, unifed_time_out, azimuth_sensor_out, tickRate);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_AzimuthSensor += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -139,7 +141,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        NIPPositionMap(parametrs->nipPosition, parametrs->uTime, &unifed_time_out, &nip_pos_out);
+        NIPPositionMap(parametrs->nipPosition, parametrs->uTime, unifed_time_out, &nip_pos_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_NIPPositionMap += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -148,7 +150,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        NIPLevelCalculate(parametrs->nipLevel, parametrs->uTime, &azimuth_sensor_out, &nip_pos_out);
+        NIPLevelCalculate(parametrs->nipLevel, parametrs->uTime, azimuth_sensor_out, &nip_pos_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_NIPLevelCalculate += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -166,7 +168,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        clutter_response_calc(parametrs->clutterResponse, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, &pp_pos_out, &pp_find_out);
+        clutter_response_calc(parametrs->clutterResponse, parametrs->uTime, unifed_time_out, azimuth_sensor_out, &pp_pos_out, &pp_find_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_clutter_resp += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -184,7 +186,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        target_response_calc(parametrs->targetResponse, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, &target_pos_out, &target_find_out);
+        target_response_calc(parametrs->targetResponse, parametrs->uTime, unifed_time_out, azimuth_sensor_out, &target_pos_out, &target_find_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_target_resp += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -202,7 +204,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        Summator(parametrs->summator, &unifed_time_out, parametrs->uTime, &target_signals_out, &pp_signals_out, &nip_formation_signals_out, &noise_generator_out, &summator_out);
+        Summator(parametrs->summator, unifed_time_out, parametrs->uTime, &target_signals_out, &pp_signals_out, &nip_formation_signals_out, &noise_generator_out, summator_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_Summator += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -211,7 +213,7 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        FrequencyConverter(parametrs->frequencyConverter, &unifed_time_out, &summator_out);
+        FrequencyConverter(parametrs->frequencyConverter, unifed_time_out, summator_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_FreqConverter += get_elapsed_ms(s_blk, e_block);
         #endif
@@ -220,12 +222,13 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
-        createImitatatorOutData(&summator_out, &unifed_time_out, &azimuth_sensor_out, out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_createOutData += get_elapsed_ms(s_blk, e_block);
         #endif
 
     }
+
+    // Результаты уже записаны напрямую в буферы вызывающего кода.
 
     #if ENABLE_PROFILING
     // Вывод собранной статистики в консоль Qt
@@ -257,7 +260,6 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
     free(pp_signals_out.clutter_signals);
     free(nip_formation_signals_out.nip_signals);
     free(target_signals_out.target_signals);
-    free(summator_out.sum_signals);
 
     if (parametrs->nipPosition != NULL) {
         free(parametrs->nipPosition->NIPMap);

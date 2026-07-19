@@ -1,5 +1,3 @@
-
-
 #include <QApplication>
 #include <QLabel>
 #include <QTimer>
@@ -19,6 +17,7 @@
 #include <QMap>
 #include <atomic>
 #include "UI/paramdialog.h"
+
 // Подключаем Си-интерфейсы
 extern "C" {
 #include "Imitator/Imitator.h"
@@ -29,48 +28,55 @@ extern "C" {
 }
 
 // =========================================================================
-// ГЛОБАЛЬНЫЕ ДАННЫЕ СИНХРОНИЗАЦИИ ПОТОКОВ (Для разделения GUI и математики)
+// ГЛОБАЛЬНЫЕ ДАННЫЕ СИНХРОНИЗАЦИИ ПОТОКОВ
 // =========================================================================
-QMutex g_dataMutex;          // Мьютекс для защиты общих данных РЛС
+QMutex g_dataMutex;          // Мьютекс для защиты общих данных РЛС и структур параметров
 double g_sharedAngle = 0.0;   // Актуальный угол, передаваемый из Си-модели в GUI
 
-// Флаги управления (атомарные, так как читаются из разных потоков)
+// Флаги управления
 std::atomic<bool> g_isSimulationRunning{false};
 std::atomic<bool> g_isRotating{true};
 std::atomic<bool> g_isRadiationOn{false};
 std::atomic<bool> g_threadShouldStop{false};
+std::atomic<bool> g_blockComputation{false}; // Флаг для безопасного обновления параметров из диалога
 
 // =========================================================================
-// ПОТОК ВЫЧИСЛЕНИЙ РЛС (Выполняет тяжелую Си-математику)
+// ПОТОК ВЫЧИСЛЕНИЙ РЛС (С компенсацией времени выполнения шага)
 // =========================================================================
 class RadarComputeWorker : public QThread {
 public:
     struct ImitatorParametrs *simParams;
     struct ImitOutData *simOutput;
-    int tickRate;
+    int targetTickRateMs; // Целевое время одного такта моделирования (например, 10 мс)
 
-    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out, int rate)
-        : simParams(p), simOutput(out), tickRate(rate) {}
+    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out, int rateMs)
+        : simParams(p), simOutput(out), targetTickRateMs(rateMs) {}
 
 protected:
     void run() override {
+        QElapsedTimer pacerTimer;
+        
         while (!g_threadShouldStop.load()) {
-            if (!g_isSimulationRunning.load()) {
-                // Если симуляция на паузе, спим 5 мс, чтобы не грузить ядро процессора пустым циклом
+            if (!g_isSimulationRunning.load() || g_blockComputation.load()) {
                 msleep(5);
                 continue;
             }
 
-            // Синхронизируем интерактивные флаги управления перед шагом модели
+            // Засекаем время начала такта моделирования
+            pacerTimer.start();
+
+            // Безопасно обновляем интерактивные параметры под мьютексом,
+            // так как simParams теперь могут параллельно настраиваться из GUI
+            g_dataMutex.lock();
             simParams->azimuth->angularVelocity = g_isRotating.load() ? 10.0 : 0.0;
             simParams->targetFormation->enable = g_isRadiationOn.load() ? 1 : 0;
             simParams->clutterFormation->enable = g_isRadiationOn.load() ? 1 : 0;
+            g_dataMutex.unlock();
 
-            // Вызов Си-имитатора (точка долгой задержки вычислений)
-            // Теперь выполняется в отдельном системном потоке!
+            // Вызов Си-имитатора
             Imitator(simParams, simOutput);
 
-            // Защищаем критическую секцию обновления данных для графики
+            // Критическая секция: передаем угол в GUI и сохраняем его для следующего шага Си-модели
             g_dataMutex.lock();
             if (simOutput->AzimuthData != nullptr) {
                 g_sharedAngle = simOutput->AzimuthData->azimuth_new;
@@ -81,9 +87,17 @@ protected:
             // Копируем обнаруженные точки в g_sharedTargets под мьютексом
             g_dataMutex.unlock();
 
-            // Небольшой сон после шага, чтобы не полностью блокировать планировщик
-            // и не "съедать" весь доступный ресурс у GUI-потока.
-            msleep(1);
+            // --- ЭЛЕГАНТНАЯ КОМПЕНСАЦИЯ ВРЕМЕНИ ШАГА ---
+            // Вычисляем, сколько времени Си-модель РЛС реально потратила на расчеты
+            qint64 elapsedMs = pacerTimer.elapsed();
+            if (elapsedMs < targetTickRateMs) {
+                // Спим ровно столько, сколько осталось до ровного такта (вычитая время расчетов)
+                msleep(targetTickRateMs - elapsedMs);
+            } else {
+                // Если Си-модель считала дольше, чем targetTickRateMs, не спим вообще,
+                // даем планировщику микро-паузу, чтобы разгрузить ядро ОС
+                msleep(1);
+            }
         }
     }
 };
@@ -197,18 +211,17 @@ int main(int argc, char *argv[]) {
     simOutput->SummatorData = (struct ImitSummatorOut *)calloc(1, sizeof(struct ImitSummatorOut));
     simOutput->SummatorData->sum_signals = (float *)calloc(simParams->uTime->max_sampling_cnt, sizeof(float));
 
-    // Инициализация и запуск вычислительного потока
-    int tickRate = 10;
-    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput, tickRate);
+    // Инициализация вычислительного потока. Ставим такт 10 мс (100 шагов модели в секунду)
+    int tickRateMs = 10;
+    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput, tickRateMs);
     workerThread->start();
 
     const double PI = 3.141592653589793;
     QTimer timer;
 
-    // Слой отрисовки интерфейса (Поток GUI) - срабатывает с разумной частотой, чтобы
-    // не перегружать старый Qt и не терять отзывчивость интерфейса.
     QElapsedTimer frameTimer;
     bool frameTimerInitialized = false;
+    
     auto redraw = [&]() {
         if (!frameTimerInitialized) {
             frameTimer.start();
@@ -233,7 +246,7 @@ int main(int argc, char *argv[]) {
         int cy = size.height() / 2;
         int radius = std::min(cx, cy) - 25;
 
-        // Статическая сетка
+        // Сетка ИКО
         painter.setPen(QPen(QColor(0, 100, 0), 1));
         painter.drawEllipse(QPoint(cx, cy), radius, radius);
         painter.drawEllipse(QPoint(cx, cy), radius * 2 / 3, radius * 2 / 3);
@@ -245,10 +258,9 @@ int main(int argc, char *argv[]) {
             painter.drawLine(cx, cy, cx + radius * std::cos(rad), cy + radius * std::sin(rad));
         }
 
-        // КРИТИЧЕСКАЯ СЕКЦИЯ: Быстро забираем данные из вычислительного потока
+        // КРИТИЧЕСКАЯ СЕКЦИЯ: Быстро копируем актуальный угол РЛС
         g_dataMutex.lock();
         double drawAngle = g_sharedAngle;
-        // Тут забираем локальную копию карты целей для отрисовки от обработчика
         g_dataMutex.unlock();
 
         double radians = (drawAngle - 90) * PI / 180.0;
@@ -276,26 +288,24 @@ int main(int argc, char *argv[]) {
     timer.start(16);
     redraw();
 
-    // Интерактивная привязка кнопок управления (Пишут в атомарные переменные)
+    // Кнопки управления
     QObject::connect(simButton, &QPushButton::clicked, [&]() {
         bool nextState = !g_isSimulationRunning.load();
         g_isSimulationRunning.store(nextState);
         simButton->setText(nextState ? "Стоп моделирования" : "Запуск моделирования");
     });
+    
     QObject::connect(rotationButton, &QPushButton::clicked, [&]() {
         bool nextState = !g_isRotating.load();
         g_isRotating.store(nextState);
         rotationButton->setText(nextState ? "Остановить вращение" : "Запустить вращение");
     });
+    
     QObject::connect(radButton, &QPushButton::clicked, [&]() {
         bool nextState = !g_isRadiationOn.load();
         g_isRadiationOn.store(nextState);
         radButton->setText(nextState ? "Выключить излучение" : "Включить излучение");
     });
-    //QObject::connect(paramButton, &QPushButton::clicked, [&]() {
-    //    ParamDialog dialog(&window);
-    //    dialog.exec();
-    //});
 
     QObject::connect(paramButton, &QPushButton::clicked, [&]() {
         ParamDialog dialog(&window);
@@ -324,13 +334,13 @@ int main(int argc, char *argv[]) {
     window.showMaximized();
     int result = app.exec();
 
-    // Корректная остановка фонового вычислительного потока
+    // Корректный выход
     g_threadShouldStop.store(true);
     workerThread->quit();
-    workerThread->wait(); // Ждем завершения текущего такта Си-модели
+    workerThread->wait(); 
     delete workerThread;
 
-    // Освобождение динамической памяти Си-структур
+    // Освобождение памяти
     free(simOutput->SummatorData->sum_signals);
     free(simOutput->SummatorData);
     free(simOutput->AzimuthData);
