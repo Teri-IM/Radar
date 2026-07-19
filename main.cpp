@@ -343,7 +343,8 @@ protected:
                 simParams->azimuth->startAngle = state_.sharedAngle;
 
                 state_.sharedTargets.clear();
-                if (resources_.handlerOutput != nullptr && resources_.handlerOutput->number_of_objects > 0) {
+                if (resources_.handlerOutput != nullptr && resources_.handlerOutput->number_of_objects > 0 &&
+                    resources_.handlerOutput->sign != nullptr) {
                     for (int i = 0; i < resources_.handlerOutput->number_of_objects; ++i) {
                         const struct threshold_device_out &target = resources_.handlerOutput->sign[i];
                         if (target.amplitude > 0 && target.AzimuthData != nullptr) {
