@@ -1,6 +1,7 @@
 #include "Imitator.h"
 #include "Imitator/UnifiedImitatorParam.h"
 #include <stdlib.h> // Для calloc и free
+#include <string.h> // Для memcpy
 #include <time.h>   // Для clock_gettime
 #define tickRate 10
 #define ENABLE_PROFILING 0
@@ -115,82 +116,55 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         timeTick(parametrs->uTime, &unifed_time_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_timeTick += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         generateNoise(parametrs->noise, &unifed_time_out, &noise_generator_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_generateNoise += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         AzimuthSensor(parametrs->azimuth, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, tickRate);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_AzimuthSensor += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         NIPPositionMap(parametrs->nipPosition, parametrs->uTime, &unifed_time_out, &nip_pos_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_NIPPositionMap += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         NIPLevelCalculate(parametrs->nipLevel, parametrs->uTime, &azimuth_sensor_out, &nip_pos_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_NIPLevelCalculate += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         FormNIPSignal(parametrs->nipFormation, &nip_pos_out, parametrs->uTime, &nip_formation_signals_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_FormNIPSignal += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         clutter_response_calc(parametrs->clutterResponse, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, &pp_pos_out, &pp_find_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_clutter_resp += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         FormClutterSignal(parametrs->clutterFormation, &pp_find_out, parametrs->uTime, &pp_signals_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_FormClutterSignal += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         target_response_calc(parametrs->targetResponse, parametrs->uTime, &unifed_time_out, &azimuth_sensor_out, &target_pos_out, &target_find_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_target_resp += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         FormTargetSignal(parametrs->targetFormation, &target_find_out, parametrs->uTime, &target_signals_out);
@@ -198,6 +172,19 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_FormTargetSignal += get_elapsed_ms(s_blk, e_block);
         #endif
 
+        if (out != NULL) {
+            if (out->TargetPositionData != NULL && out->TargetPositionData->Target_map != NULL && target_pos_out.Target_map != NULL) {
+                memcpy(out->TargetPositionData->Target_map, target_pos_out.Target_map,
+                       sizeof(struct Point) * target_pos_out.cntTarget);
+                out->TargetPositionData->cntTarget = target_pos_out.cntTarget;
+            }
+
+            if (out->TargetResponseData != NULL && out->TargetResponseData->target_map_find != NULL && target_find_out.target_map_find != NULL) {
+                memcpy(out->TargetResponseData->target_map_find, target_find_out.target_map_find,
+                       sizeof(struct PointWith_discredNum) * target_find_out.cntTarget_find);
+                out->TargetResponseData->cntTarget_find = target_find_out.cntTarget_find;
+            }
+        }
 
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
@@ -205,19 +192,13 @@ int Imitator(struct ImitatorParametrs *parametrs, struct ImitOutData *out) {
         Summator(parametrs->summator, &unifed_time_out, parametrs->uTime, &target_signals_out, &pp_signals_out, &nip_formation_signals_out, &noise_generator_out, &summator_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_Summator += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         FrequencyConverter(parametrs->frequencyConverter, &unifed_time_out, &summator_out);
         #if ENABLE_PROFILING
         clock_gettime(CLOCK_MONOTONIC, &e_block); t_FreqConverter += get_elapsed_ms(s_blk, e_block);
-        #endif
-
-
-        #if ENABLE_PROFILING
+        
         clock_gettime(CLOCK_MONOTONIC, &s_blk);
         #endif
         createImitatatorOutData(&summator_out, &unifed_time_out, &azimuth_sensor_out, out);

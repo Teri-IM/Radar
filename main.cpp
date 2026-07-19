@@ -18,6 +18,7 @@
 #include <QElapsedTimer>
 #include <QMap>
 #include <atomic>
+#include <vector>
 #include "UI/paramdialog.h"
 // Подключаем Си-интерфейсы
 extern "C" {
@@ -33,6 +34,14 @@ extern "C" {
 // =========================================================================
 QMutex g_dataMutex;          // Мьютекс для защиты общих данных РЛС
 double g_sharedAngle = 0.0;   // Актуальный угол, передаваемый из Си-модели в GUI
+
+struct SharedTargetPoint {
+    double angle;
+    double distance;
+    double amplitude;
+};
+
+std::vector<SharedTargetPoint> g_sharedTargets;
 
 // Флаги управления (атомарные, так как читаются из разных потоков)
 std::atomic<bool> g_isSimulationRunning{false};
@@ -76,9 +85,16 @@ protected:
                 g_sharedAngle = simOutput->AzimuthData->azimuth_new;
                 simParams->azimuth->startAngle = g_sharedAngle;
             }
-            // [ЗДЕСЬ БУДЕТ ВЫЗОВ ОБРАБОТЧИКА]:
-            // Handler(..., simOutput, ...);
-            // Копируем обнаруженные точки в g_sharedTargets под мьютексом
+
+            g_sharedTargets.clear();
+            if (simOutput->TargetPositionData != nullptr && simOutput->TargetPositionData->Target_map != nullptr) {
+                for (int i = 0; i < simOutput->TargetPositionData->cntTarget; ++i) {
+                    const struct Point &target = simOutput->TargetPositionData->Target_map[i];
+                    if (target.amplitude > 0.0f) {
+                        g_sharedTargets.push_back({target.angle, target.distance, target.amplitude});
+                    }
+                }
+            }
             g_dataMutex.unlock();
 
             // Небольшой сон после шага, чтобы не полностью блокировать планировщик
@@ -191,11 +207,15 @@ int main(int argc, char *argv[]) {
     simParams->noise->mean = 20;
     simParams->noise->sigma = 15;
 
-    struct ImitOutData *simOutput = (struct ImitOutData *)malloc(sizeof(struct ImitOutData));
+    struct ImitOutData *simOutput = (struct ImitOutData *)calloc(1, sizeof(struct ImitOutData));
     simOutput->TimeData = (struct UnifedTimeOut *)calloc(1, sizeof(struct UnifedTimeOut));
     simOutput->AzimuthData = (struct AzimutSensorOut *)calloc(1, sizeof(struct AzimutSensorOut));
     simOutput->SummatorData = (struct ImitSummatorOut *)calloc(1, sizeof(struct ImitSummatorOut));
     simOutput->SummatorData->sum_signals = (float *)calloc(simParams->uTime->max_sampling_cnt, sizeof(float));
+    simOutput->TargetPositionData = (struct TargetPositionOut *)calloc(1, sizeof(struct TargetPositionOut));
+    simOutput->TargetPositionData->Target_map = (struct Point *)calloc(simParams->targetPosition->cntTarget, sizeof(struct Point));
+    simOutput->TargetResponseData = (struct TargetResponseOut *)calloc(1, sizeof(struct TargetResponseOut));
+    simOutput->TargetResponseData->target_map_find = (struct PointWith_discredNum *)calloc(simParams->targetPosition->cntTarget, sizeof(struct PointWith_discredNum));
 
     // Инициализация и запуск вычислительного потока
     int tickRate = 10;
@@ -246,9 +266,10 @@ int main(int argc, char *argv[]) {
         }
 
         // КРИТИЧЕСКАЯ СЕКЦИЯ: Быстро забираем данные из вычислительного потока
+        std::vector<SharedTargetPoint> drawTargets;
         g_dataMutex.lock();
         double drawAngle = g_sharedAngle;
-        // Тут забираем локальную копию карты целей для отрисовки от обработчика
+        drawTargets = g_sharedTargets;
         g_dataMutex.unlock();
 
         double radians = (drawAngle - 90) * PI / 180.0;
@@ -259,7 +280,16 @@ int main(int argc, char *argv[]) {
         }
         painter.drawLine(cx, cy, cx + radius * std::cos(radians), cy + radius * std::sin(radians));
 
-        // [ТУТ ОТРИСОВКА ТОЧЕК ЦЕЛЕЙ НА ОСНОВЕ СКОПИРОВАННЫХ ДАННЫХ]
+        painter.setPen(QPen(QColor(255, 80, 80), 2));
+        painter.setBrush(QBrush(QColor(255, 80, 80)));
+        for (const auto &target : drawTargets) {
+            double targetAngleRad = (target.angle - 90.0) * PI / 180.0;
+            double normalizedDistance = target.distance / std::max(1.0f, simParams->imitator->maxDistance);
+            normalizedDistance = std::max(0.0, std::min(1.0, normalizedDistance));
+            int tx = cx + static_cast<int>(radius * normalizedDistance * std::cos(targetAngleRad));
+            int ty = cy + static_cast<int>(radius * normalizedDistance * std::sin(targetAngleRad));
+            painter.drawEllipse(QPoint(tx, ty), 4, 4);
+        }
 
         painter.end();
         radarLabel->setPixmap(pixmap);
@@ -335,6 +365,10 @@ int main(int argc, char *argv[]) {
     free(simOutput->SummatorData);
     free(simOutput->AzimuthData);
     free(simOutput->TimeData);
+    free(simOutput->TargetPositionData->Target_map);
+    free(simOutput->TargetPositionData);
+    free(simOutput->TargetResponseData->target_map_find);
+    free(simOutput->TargetResponseData);
     free(simOutput);
     free(simParams->imitator);
     free(simParams->uTime);
