@@ -41,63 +41,50 @@ std::atomic<bool> g_threadShouldStop{false};
 std::atomic<bool> g_blockComputation{false}; // Флаг для безопасного обновления параметров из диалога
 
 // =========================================================================
-// ПОТОК ВЫЧИСЛЕНИЙ РЛС (С компенсацией времени выполнения шага)
+// ПОТОК ВЫЧИСЛЕНИЙ РЛС (Оптимизированный под тяжелую математику ~180 мс)
 // =========================================================================
 class RadarComputeWorker : public QThread {
 public:
     struct ImitatorParametrs *simParams;
     struct ImitOutData *simOutput;
-    int targetTickRateMs; // Целевое время одного такта моделирования (например, 10 мс)
 
-    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out, int rateMs)
-        : simParams(p), simOutput(out), targetTickRateMs(rateMs) {}
+    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out)
+        : simParams(p), simOutput(out) {}
 
 protected:
     void run() override {
-        QElapsedTimer pacerTimer;
-        
         while (!g_threadShouldStop.load()) {
             if (!g_isSimulationRunning.load() || g_blockComputation.load()) {
-                msleep(5);
+                msleep(10); // На паузе спим подольше, разгружаем процессор
                 continue;
             }
 
-            // Засекаем время начала такта моделирования
-            pacerTimer.start();
-
-            // Безопасно обновляем интерактивные параметры под мьютексом,
-            // так как simParams теперь могут параллельно настраиваться из GUI
+            // 1. Быстро обновляем флаги управления из GUI
             g_dataMutex.lock();
             simParams->azimuth->angularVelocity = g_isRotating.load() ? 10.0 : 0.0;
             simParams->targetFormation->enable = g_isRadiationOn.load() ? 1 : 0;
             simParams->clutterFormation->enable = g_isRadiationOn.load() ? 1 : 0;
             g_dataMutex.unlock();
 
-            // Вызов Си-имитатора
+            // 2. Вызов Си-имитатора (ВНЕ мьютекса!). Тратит 180 мс.
+            // В это время мьютекс полностью свободен, GUI-поток не тормозит!
             Imitator(simParams, simOutput);
 
-            // Критическая секция: передаем угол в GUI и сохраняем его для следующего шага Си-модели
+            // 3. Критическая секция: передаем вычисленный угол в GUI
             g_dataMutex.lock();
             if (simOutput->AzimuthData != nullptr) {
                 g_sharedAngle = simOutput->AzimuthData->azimuth_new;
-                simParams->azimuth->startAngle = g_sharedAngle;
+                
+                // Передаем угол на вход следующего шага
+                simParams->azimuth->startAngle = g_sharedAngle; 
             }
-            // [ЗДЕСЬ БУДЕТ ВЫЗОВ ОБРАБОТЧИКА]:
-            // Handler(..., simOutput, ...);
-            // Копируем обнаруженные точки в g_sharedTargets под мьютексом
             g_dataMutex.unlock();
 
-            // --- ЭЛЕГАНТНАЯ КОМПЕНСАЦИЯ ВРЕМЕНИ ШАГА ---
-            // Вычисляем, сколько времени Си-модель РЛС реально потратила на расчеты
-            qint64 elapsedMs = pacerTimer.elapsed();
-            if (elapsedMs < targetTickRateMs) {
-                // Спим ровно столько, сколько осталось до ровного такта (вычитая время расчетов)
-                msleep(targetTickRateMs - elapsedMs);
-            } else {
-                // Если Си-модель считала дольше, чем targetTickRateMs, не спим вообще,
-                // даем планировщику микро-паузу, чтобы разгрузить ядро ОС
-                msleep(1);
-            }
+            // 4. Важнейший костыль для Qt 5.7:
+            // Даем принудительную паузу в 5-10 мс РОВНО для того, чтобы 
+            // GUI-поток гарантированно успел захватить освободившийся мьютекс
+            // и отрисовать ИКО без задержек.
+            msleep(5); 
         }
     }
 };
@@ -211,9 +198,7 @@ int main(int argc, char *argv[]) {
     simOutput->SummatorData = (struct ImitSummatorOut *)calloc(1, sizeof(struct ImitSummatorOut));
     simOutput->SummatorData->sum_signals = (float *)calloc(simParams->uTime->max_sampling_cnt, sizeof(float));
 
-    // Инициализация вычислительного потока. Ставим такт 10 мс (100 шагов модели в секунду)
-    int tickRateMs = 10;
-    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput, tickRateMs);
+    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput);
     workerThread->start();
 
     const double PI = 3.141592653589793;
