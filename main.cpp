@@ -1,5 +1,3 @@
-
-
 #include <QApplication>
 #include <QLabel>
 #include <QTimer>
@@ -20,6 +18,7 @@
 #include <atomic>
 #include <vector>
 #include "UI/paramdialog.h"
+
 // Подключаем Си-интерфейсы
 extern "C" {
 #include "Imitator/Imitator.h"
@@ -31,9 +30,9 @@ extern "C" {
 }
 
 // =========================================================================
-// ГЛОБАЛЬНЫЕ ДАННЫЕ СИНХРОНИЗАЦИИ ПОТОКОВ (Для разделения GUI и математики)
+// ГЛОБАЛЬНЫЕ ДАННЫЕ СИНХРОНИЗАЦИИ ПОТОКОВ
 // =========================================================================
-QMutex g_dataMutex;          // Мьютекс для защиты общих данных РЛС
+QMutex g_dataMutex;          // Мьютекс для защиты общих данных РЛС и структур параметров
 double g_sharedAngle = 0.0;   // Актуальный угол, передаваемый из Си-модели в GUI
 
 struct SharedTargetPoint {
@@ -49,42 +48,45 @@ std::atomic<bool> g_isSimulationRunning{false};
 std::atomic<bool> g_isRotating{true};
 std::atomic<bool> g_isRadiationOn{false};
 std::atomic<bool> g_threadShouldStop{false};
+std::atomic<bool> g_blockComputation{false}; // Флаг для безопасного обновления параметров из диалога
 
 // =========================================================================
-// ПОТОК ВЫЧИСЛЕНИЙ РЛС (Выполняет тяжелую Си-математику)
+// ПОТОК ВЫЧИСЛЕНИЙ РЛС (Оптимизированный под тяжелую математику ~180 мс)
 // =========================================================================
 class RadarComputeWorker : public QThread {
 public:
     struct ImitatorParametrs *simParams;
     struct ImitOutData *simOutput;
-    int tickRate;
 
-    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out, int rate)
-        : simParams(p), simOutput(out), tickRate(rate) {}
+    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out)
+        : simParams(p), simOutput(out) {}
 
 protected:
     void run() override {
         while (!g_threadShouldStop.load()) {
-            if (!g_isSimulationRunning.load()) {
-                // Если симуляция на паузе, спим 5 мс, чтобы не грузить ядро процессора пустым циклом
-                msleep(5);
+            if (!g_isSimulationRunning.load() || g_blockComputation.load()) {
+                msleep(10); // На паузе спим подольше, разгружаем процессор
                 continue;
             }
 
-            // Синхронизируем интерактивные флаги управления перед шагом модели
+            // 1. Быстро обновляем флаги управления из GUI
+            g_dataMutex.lock();
             simParams->azimuth->angularVelocity = g_isRotating.load() ? 10.0 : 0.0;
             simParams->targetFormation->enable = g_isRadiationOn.load() ? 1 : 0;
             simParams->clutterFormation->enable = g_isRadiationOn.load() ? 1 : 0;
+            g_dataMutex.unlock();
 
-            // Вызов Си-имитатора (точка долгой задержки вычислений)
-            // Теперь выполняется в отдельном системном потоке!
+            // 2. Вызов Си-имитатора (ВНЕ мьютекса!). Тратит 180 мс.
+            // В это время мьютекс полностью свободен, GUI-поток не тормозит!
             Imitator(simParams, simOutput);
 
-            // Защищаем критическую секцию обновления данных для графики
+            // 3. Критическая секция: передаем вычисленный угол в GUI
             g_dataMutex.lock();
             if (simOutput->AzimuthData != nullptr) {
                 g_sharedAngle = simOutput->AzimuthData->azimuth_new;
-                simParams->azimuth->startAngle = g_sharedAngle;
+                
+                // Передаем угол на вход следующего шага
+                simParams->azimuth->startAngle = g_sharedAngle; 
             }
 
             g_sharedTargets.clear();
@@ -98,9 +100,11 @@ protected:
             }
             g_dataMutex.unlock();
 
-            // Небольшой сон после шага, чтобы не полностью блокировать планировщик
-            // и не "съедать" весь доступный ресурс у GUI-потока.
-            msleep(1);
+            // 4. Важнейший костыль для Qt 5.7:
+            // Даем принудительную паузу в 5-10 мс РОВНО для того, чтобы 
+            // GUI-поток гарантированно успел захватить освободившийся мьютекс
+            // и отрисовать ИКО без задержек.
+            msleep(5); 
         }
     }
 };
@@ -218,9 +222,7 @@ int main(int argc, char *argv[]) {
     simOutput->TargetResponseData = (struct TargetResponseOut *)calloc(1, sizeof(struct TargetResponseOut));
     simOutput->TargetResponseData->target_map_find = (struct PointWith_discredNum *)calloc(simParams->targetPosition->cntTarget, sizeof(struct PointWith_discredNum));
 
-    // Инициализация и запуск вычислительного потока
-    int tickRate = 10;
-    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput, tickRate);
+    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput);
     workerThread->start();
 
     // Выходные данные ОБРАБОТЧИКА (сюда запишутся отметки целей/координаты для отрисовки)
@@ -230,10 +232,9 @@ int main(int argc, char *argv[]) {
     const double PI = 3.141592653589793;
     QTimer timer;
 
-    // Слой отрисовки интерфейса (Поток GUI) - срабатывает с разумной частотой, чтобы
-    // не перегружать старый Qt и не терять отзывчивость интерфейса.
     QElapsedTimer frameTimer;
     bool frameTimerInitialized = false;
+    
     auto redraw = [&]() {
         if (!frameTimerInitialized) {
             frameTimer.start();
@@ -258,7 +259,7 @@ int main(int argc, char *argv[]) {
         int cy = size.height() / 2;
         int radius = std::min(cx, cy) - 25;
 
-        // Статическая сетка
+        // Сетка ИКО
         painter.setPen(QPen(QColor(0, 100, 0), 1));
         painter.drawEllipse(QPoint(cx, cy), radius, radius);
         painter.drawEllipse(QPoint(cx, cy), radius * 2 / 3, radius * 2 / 3);
@@ -311,26 +312,24 @@ int main(int argc, char *argv[]) {
     timer.start(16);
     redraw();
 
-    // Интерактивная привязка кнопок управления (Пишут в атомарные переменные)
+    // Кнопки управления
     QObject::connect(simButton, &QPushButton::clicked, [&]() {
         bool nextState = !g_isSimulationRunning.load();
         g_isSimulationRunning.store(nextState);
         simButton->setText(nextState ? "Стоп моделирования" : "Запуск моделирования");
     });
+    
     QObject::connect(rotationButton, &QPushButton::clicked, [&]() {
         bool nextState = !g_isRotating.load();
         g_isRotating.store(nextState);
         rotationButton->setText(nextState ? "Остановить вращение" : "Запустить вращение");
     });
+    
     QObject::connect(radButton, &QPushButton::clicked, [&]() {
         bool nextState = !g_isRadiationOn.load();
         g_isRadiationOn.store(nextState);
         radButton->setText(nextState ? "Выключить излучение" : "Включить излучение");
     });
-    //QObject::connect(paramButton, &QPushButton::clicked, [&]() {
-    //    ParamDialog dialog(&window);
-    //    dialog.exec();
-    //});
 
     QObject::connect(paramButton, &QPushButton::clicked, [&]() {
         ParamDialog dialog(&window);
@@ -359,13 +358,13 @@ int main(int argc, char *argv[]) {
     window.showMaximized();
     int result = app.exec();
 
-    // Корректная остановка фонового вычислительного потока
+    // Корректный выход
     g_threadShouldStop.store(true);
     workerThread->quit();
-    workerThread->wait(); // Ждем завершения текущего такта Си-модели
+    workerThread->wait(); 
     delete workerThread;
 
-    // Освобождение динамической памяти Си-структур
+    // Освобождение памяти
     free(simOutput->SummatorData->sum_signals);
     free(simOutput->SummatorData);
     free(simOutput->AzimuthData);
