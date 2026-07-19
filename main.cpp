@@ -57,9 +57,12 @@ class RadarComputeWorker : public QThread {
 public:
     struct ImitatorParametrs *simParams;
     struct ImitOutData *simOutput;
+    struct GlobalProcessingParam *handlerParams;
+    struct Codogramm *handlerOutput;
 
-    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out)
-        : simParams(p), simOutput(out) {}
+    RadarComputeWorker(struct ImitatorParametrs *p, struct ImitOutData *out,
+                      struct GlobalProcessingParam *hp, struct Codogramm *ho)
+        : simParams(p), simOutput(out), handlerParams(hp), handlerOutput(ho) {}
 
 protected:
     void run() override {
@@ -80,7 +83,12 @@ protected:
             // В это время мьютекс полностью свободен, GUI-поток не тормозит!
             Imitator(simParams, simOutput);
 
-            // 3. Критическая секция: передаем вычисленный угол в GUI
+            // 3. Передаем вывод обработчика в GUI, а не сырые точки имитатора
+            if (handlerParams != nullptr && handlerOutput != nullptr) {
+                ProcessingModule(handlerParams, simOutput, handlerOutput);
+            }
+
+            // 4. Критическая секция: передаем вычисленный угол и цели в GUI
             g_dataMutex.lock();
             if (simOutput->AzimuthData != nullptr) {
                 g_sharedAngle = simOutput->AzimuthData->azimuth_new;
@@ -90,11 +98,14 @@ protected:
             }
 
             g_sharedTargets.clear();
-            if (simOutput->TargetPositionData != nullptr && simOutput->TargetPositionData->Target_map != nullptr) {
-                for (int i = 0; i < simOutput->TargetPositionData->cntTarget; ++i) {
-                    const struct Point &target = simOutput->TargetPositionData->Target_map[i];
-                    if (target.amplitude > 0.0f) {
-                        g_sharedTargets.push_back({target.angle, target.distance, target.amplitude});
+            if (handlerOutput != nullptr && handlerOutput->number_of_objects > 0) {
+                for (int i = 0; i < handlerOutput->number_of_objects; ++i) {
+                    const struct threshold_device_out &target = handlerOutput->sign[i];
+                    if (target.amplitude > 0 && target.AzimuthData != nullptr) {
+                        double angle = target.AzimuthData->azimuth_new;
+                        double distance = static_cast<double>(target.distance);
+                        double amplitude = static_cast<double>(target.amplitude);
+                        g_sharedTargets.push_back({angle, distance, amplitude});
                     }
                 }
             }
@@ -222,12 +233,12 @@ int main(int argc, char *argv[]) {
     simOutput->TargetResponseData = (struct TargetResponseOut *)calloc(1, sizeof(struct TargetResponseOut));
     simOutput->TargetResponseData->target_map_find = (struct PointWith_discredNum *)calloc(simParams->targetPosition->cntTarget, sizeof(struct PointWith_discredNum));
 
-    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput);
-    workerThread->start();
-
-    // Выходные данные ОБРАБОТЧИКА (сюда запишутся отметки целей/координаты для отрисовки)
-    struct Codogramm *handlerOutput = (struct Codogramm *)malloc(sizeof(struct Codogramm));
+    struct Codogramm *handlerOutput = (struct Codogramm *)calloc(1, sizeof(struct Codogramm));
     struct GlobalProcessingParam *handlerParams = (struct GlobalProcessingParam *)malloc(sizeof(struct GlobalProcessingParam));
+    handlerParams->threshold.threshold = 100;
+
+    RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput, handlerParams, handlerOutput);
+    workerThread->start();
 
     const double PI = 3.141592653589793;
     QTimer timer;
