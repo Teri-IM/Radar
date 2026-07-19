@@ -10,7 +10,7 @@
 #define IMITATORPARAM_H_
 
 struct ImitParam{
-	float maxDistance; //Максимальная дистанция (м)
+    float maxDistance; //Максимальная дистанция (м)
 };
 
 

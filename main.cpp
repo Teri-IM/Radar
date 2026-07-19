@@ -180,7 +180,7 @@ int main(int argc, char *argv[]) {
     // Выделение памяти под Си-структуры параметров
     struct ImitatorParametrs *simParams = (struct ImitatorParametrs *)malloc(sizeof(struct ImitatorParametrs));
     simParams->imitator = (struct ImitParam *)malloc(sizeof(struct ImitParam));
-    simParams->imitator->maxDistance = 100000.0;
+    simParams->imitator->maxDistance = 200000.0;
     simParams->uTime = (struct UTimeParam *)malloc(sizeof(struct UTimeParam));
     simParams->uTime->probing_time = 10000;
     simParams->uTime->pulse_time = 6000;
@@ -302,7 +302,7 @@ int main(int argc, char *argv[]) {
         for (const auto &target : drawTargets) {
             double targetAngleRad = (target.angle - 90.0) * PI / 180.0;
             double normalizedDistance = target.distance / std::max(1.0f, simParams->imitator->maxDistance);
-            normalizedDistance = std::max(0.0, std::min(1.0, normalizedDistance));
+            normalizedDistance = std::max(0.0, std::min((double)simParams->imitator->maxDistance, normalizedDistance));
             int tx = cx + static_cast<int>(radius * normalizedDistance * std::cos(targetAngleRad));
             int ty = cy + static_cast<int>(radius * normalizedDistance * std::sin(targetAngleRad));
             painter.drawEllipse(QPoint(tx, ty), 4, 4);
