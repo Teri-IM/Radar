@@ -235,7 +235,7 @@ int main(int argc, char *argv[]) {
 
     struct Codogramm *handlerOutput = (struct Codogramm *)calloc(1, sizeof(struct Codogramm));
     struct GlobalProcessingParam *handlerParams = (struct GlobalProcessingParam *)malloc(sizeof(struct GlobalProcessingParam));
-    handlerParams->threshold.threshold = 100;
+    handlerParams->threshold.threshold = 700;
 
     RadarComputeWorker *workerThread = new RadarComputeWorker(simParams, simOutput, handlerParams, handlerOutput);
     workerThread->start();
