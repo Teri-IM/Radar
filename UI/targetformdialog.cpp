@@ -15,16 +15,6 @@ TargetFormDialog::TargetFormDialog(QWidget *parent)
     mainLayout->setContentsMargins(15, 15, 15, 15);
     mainLayout->setSpacing(10);
 
-    QLabel *titleLabel = new QLabel("Формуляры целей", this);
-    titleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #ffd93d;");
-    mainLayout->addWidget(titleLabel);
-
-    QFrame *line = new QFrame(this);
-    line->setFrameShape(QFrame::HLine);
-    line->setFrameShadow(QFrame::Sunken);
-    line->setStyleSheet("QFrame { color: #5d6d7e; background-color: #5d6d7e; max-height: 2px; }");
-    mainLayout->addWidget(line);
-
     QScrollArea *scrollArea = new QScrollArea(this);
     scrollArea->setWidgetResizable(true);
     scrollArea->setFrameShape(QFrame::NoFrame);
@@ -55,12 +45,9 @@ TargetFormDialog::~TargetFormDialog() {}
 
 void TargetFormDialog::initTargets()
 {
-    targetList.clear();
-
-    // Цели задаются вручную прямо здесь
-    targetList.append({1, "Цель 1", 12000.0, 45.0, 250.0, 1500.0, true});
-    targetList.append({2, "Цель 2", 8000.0, 120.0, 0.0, 900.0, true});
-    targetList.append({3, "Цель 3", 20000.0, 300.0, 400.0, 1500.0, false});
+    // Список целей больше не хранится тут: чтобы добавить/изменить цель,
+    // правьте makeDefaultTargets() в targetformdialog.h
+    targetList = makeDefaultTargets();
 }
 
 QWidget* TargetFormDialog::createTargetCard(const TargetInfo &target)
@@ -73,7 +60,9 @@ QWidget* TargetFormDialog::createTargetCard(const TargetInfo &target)
     cardLayout->setContentsMargins(10, 8, 10, 8);
     cardLayout->setSpacing(4);
 
-    QLabel *nameLabel = new QLabel(QString("%1 (%2)").arg(target.name, target.active ? "активна" : "неактивна"));
+    QLabel *nameLabel = new QLabel(QString("№%1 — %2 (%3)")
+                                    .arg(target.number)
+                                    .arg(target.name, target.active ? "активна" : "неактивна"));
     nameLabel->setStyleSheet("font-size: 14px; font-weight: bold; color: #ffffff;");
     cardLayout->addWidget(nameLabel);
 
