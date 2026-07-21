@@ -1,4 +1,4 @@
-#include "..\include\threshold.h"
+#include "../include/threshold.h"
 
 /*******************************************************************************
   void threshold_device (parameters_t *par, signal_t *in, signal_t *out);
