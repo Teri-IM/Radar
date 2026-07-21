@@ -14,6 +14,8 @@ struct ImitOutData{
     struct UnifedTimeOut *TimeData;
     struct AzimutSensorOut *AzimuthData;
     struct ImitSummatorOut *SummatorData;
+    struct TargetPositionOut *TargetPositionData;
+    struct TargetResponseOut *TargetResponseData;
 };
 
 int createImitatatorOutData(struct ImitSummatorOut *summator_data, struct UnifedTimeOut *time_data, struct AzimutSensorOut *azimuth_data, struct ImitOutData *out);

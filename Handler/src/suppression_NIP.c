@@ -9,13 +9,11 @@
 #include "../include/suppression_NIP.h"
 
 
-int suppression_NIP(struct GlobalProcessingParam *param, struct ImitOutData *in, struct data *out)
+int suppression_NIP(struct GlobalProcessingParam *param, struct data *in, struct data *out)
 { 
     if (param->suppression_NIP.enable == 1)
         {
-        *out->data.AzimuthData = *in->AzimuthData;
-        *out->data.TimeData = *in->TimeData;
-        *out->data.UAD = *in->SummatorData;
+        *out = *in;
         }   
     return 0;
 }

@@ -36,6 +36,7 @@ SOURCES += main.cpp\
         Imitator/TargetPosition.c \
         Imitator/TargetResponse.c \
         Imitator/UnifedTime.c \
+        UI/paramdialog.cpp \
         widget.cpp
 
 HEADERS  += widget.h \
@@ -79,6 +80,14 @@ HEADERS  += widget.h \
     Imitator/UnifedTime.h \
     Imitator/UnifiedImitatorParam.h \
     Imitator/UnifiedTimeParam.h \
+    UI/paramdialog.h \
     UnifiedImitatorParam.h
 
 FORMS    += widget.ui
+
+
+QMAKE_CFLAGS_RELEASE += -O3 -ftree-vectorize
+QMAKE_CXXFLAGS_RELEASE += -O3 -ftree-vectorize
+
+QMAKE_CFLAGS_DEBUG += -O3 -march=native -ftree-vectorize
+QMAKE_CXXFLAGS_DEBUG += -O3 -march=native -ftree-vectorize

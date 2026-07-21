@@ -19,13 +19,7 @@ int FormClutterSignal(struct ClutterFormationParam *p,
     if (PosIn == NULL || timeP == NULL || p == NULL) {
         return 1;
     }
-
     long long maxCnt = timeP->max_sampling_cnt;
-
-    for (int i = 0; i < timeP->max_sampling_cnt; i++) {
-
-    	out->clutter_signals[i]=0;
-       }
     if (p->enable==1){
 		int idx=0;
 		for (int i = 0; i < PosIn->cntPP_find; i++) {

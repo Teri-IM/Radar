@@ -17,7 +17,7 @@ int TargetPositionMap(struct TargetPosParam *p, struct ImitParam *imP, struct Ta
 	if (p->enable==1){
 		for(int i = 0; i<p->cntTarget; i++){
 			out->Target_map[i].angle=((float)rand() / (float)RAND_MAX)*360.0f;
-			out->Target_map[i].distance=1.0f + (((float)rand() / (float)RAND_MAX+1.0f)*(imP->maxDistance-1.0f));
+            out->Target_map[i].distance = 1.0f + (((float)rand() / (float)RAND_MAX) * (imP->maxDistance - 1.0f));
             out->Target_map[i].amplitude=p->Targetamplitude;
 		}
 	}else{

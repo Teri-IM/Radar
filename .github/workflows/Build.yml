@@ -1,0 +1,138 @@
+name: Build, Iconify and Pack Radar
+
+on:
+  push:
+    branches: [ "never" ]
+
+jobs:
+  build-and-pack:
+    runs-on: windows-latest
+
+    env:
+      TARGET_NAME: "untitled"           # Имя твоего бинарника (без .exe) как в твоем EVB
+      QT_VERSION: "6.6.1"               # Твоя версия Qt (измени, если используешь другую)
+      #QT_ARCH: "win64_mingw"            # Архитектура компилятора
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 1. Установка Qt
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: ${{ env.QT_VERSION }}
+        #arch: ${{ env.QT_ARCH }}
+
+    # 2. Установка Enigma Virtual Box
+    - name: Install Enigma Virtual Box
+      shell: powershell
+      run: |
+        Write-Host "Скачивание Enigma Virtual Box..."
+        Invoke-WebRequest -Uri "https://enigmaprotector.com/assets/files/enigmavb.exe" -OutFile "enigmavb_install.exe"
+        Start-Process -FilePath ".\enigmavb_install.exe" -ArgumentList "/S" -Wait
+
+    # 3. Скачивание утилиты rcedit для быстрой смены иконки .exe
+    - name: Download rcedit (for icon injection)
+      shell: powershell
+      run: |
+        Write-Host "Скачивание rcedit..."
+        Invoke-WebRequest -Uri "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile "rcedit.exe"
+
+    # 4. Сборка проекта через CMake
+    - name: Configure and Build Project
+      shell: powershell
+      run: |
+        mkdir build-release
+        cd build-release
+        qmake ../untitled.pro CONFIG+=release
+        make -f Makefile -j$(nproc)    
+
+    # 5. Подготовка папки публикации (dist) и запуск windeployqt
+    - name: Run windeployqt
+      shell: powershell
+      run: |
+        $DIST_DIR = "$pwd\dist"
+        New-Item -ItemType Directory -Path $DIST_DIR
+        
+        # Находим скомпилированный exe
+        $compiled_exe = Get-ChildItem -Path "build-release" -Filter "${{ env.TARGET_NAME }}.exe" -Recurse | Select-Object -First 1
+        if ($null -eq $compiled_exe) { throw "Скомпилированный файл ${{ env.TARGET_NAME }}.exe не найден!" }
+        
+        # Копируем чистый exe в папку дистрибутива
+        Copy-Item $compiled_exe.FullName -Destination "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
+        
+        # Накатываем зависимости Qt
+        Write-Host "Запуск сборщика зависимостей Qt..."
+        windeployqt --release --compiler-runtime "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
+
+    # 6. Вшивание иконки radar.ico в исполняемый файл
+    - name: Inject Icon into Executable
+      shell: powershell
+      run: |
+        $EXE_PATH = "$pwd\dist\${{ env.TARGET_NAME }}.exe"
+        $ICON_PATH = "$pwd\radar.ico"
+        
+        if (Test-Path $ICON_PATH) {
+            Write-Host "Вшиваем иконку в $EXE_PATH ..."
+            & ".\rcedit.exe" "$EXE_PATH" --set-icon "$ICON_PATH"
+            Write-Host "Иконка успешно применена!" -ForegroundColor Green
+        } else {
+            Write-Warning "Файл radar.ico не найден в корне репозитория. Пропускаем шаг."
+        }
+
+    # 7. Генерация динамического .evb и упаковка через Enigma
+    - name: Pack with Enigma Virtual Box
+      shell: powershell
+      run: |
+        $DIST_DIR = "$pwd\dist"
+        $EVB_FILE = "$DIST_DIR\package.evb"
+        $OUTPUT_EXE = "$pwd\${{ env.TARGET_NAME }}_packed.exe"
+        
+        # Генерируем конфигурацию Enigma, где вся папка dist со всеми dll-ками 
+        # виртуализируется автоматически, без необходимости прописывать каждый файл вручную.
+        $EvbTemplate = @"
+        <?xml version="1.0" encoding="utf-8"?>
+        <Enigma_Project>
+          <InputFile>$DIST_DIR\${{ env.TARGET_NAME }}.exe</InputFile>
+          <OutputFile>$OUTPUT_EXE</OutputFile>
+          <Files>
+            <Enabled>true</Enabled>
+            <DeleteExtractedOnExit>false</DeleteExtractedOnExit>
+            <Directories>
+              <Directory>
+                <Name>%DEFAULT FOLDER%</Name>
+                <Files>
+                  <File>
+                    <Type>2</Type>
+                    <Name>$DIST_DIR</Name>
+                    <Flags>20</Flags>
+                  </File>
+                </Files>
+              </Directory>
+            </Directories>
+          </Files>
+          <Options>
+            <ShareSystemProcessors>false</ShareSystemProcessors>
+            <CompressFiles>true</CompressFiles>
+          </Options>
+        </Enigma_Project>
+        "@
+        $EvbTemplate | Out-File -FilePath $EVB_FILE -Encoding utf8
+        
+        # Запуск консольного упаковщика
+        Write-Host "Запуск упаковщика Enigma..."
+        & "C:\Program Files (x86)\Enigma Virtual Box\enigmavbconsole.exe" $EVB_FILE
+        
+        if (Test-Path $OUTPUT_EXE) {
+            Write-Host "Сборка завершена успешно!" -ForegroundColor Green
+        } else {
+            throw "Ошибка: упакованный файл не был создан."
+        }
+
+    # 8. Сохранение упакованного файла как артефакта сборки
+    - name: Upload Packed Executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.TARGET_NAME }}-packed
+        path: ${{ env.TARGET_NAME }}_packed.exe

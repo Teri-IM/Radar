@@ -13,6 +13,7 @@
 #include "ClutterFormationSignalsParam.h"
 #include "ClutterResponse.h"
 #include "UnifiedTimeParam.h"
+#include <string.h>
 struct ClutterSignalsOut{
     float *clutter_signals;
 };

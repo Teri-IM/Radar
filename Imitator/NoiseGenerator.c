@@ -14,22 +14,12 @@ int generateNoise(struct NoiseParam *p, struct UnifedTimeOut *in, struct NoiseGe
 		return 1;
 	}
 	if (p->enable==1){
-		double sum = 0.0;
-		for (int i = 0; i < in->sampling_cnt; i++)
-		 {
-				sum = 0.0;
-				for (int i = 0; i < 12; i++) {
-					sum += (double)rand() / RAND_MAX;  // равномерное [0,1]
-				}
-				sum -= 6.0;
-				out->noise_signals[i] = abs(p->mean + p->sigma * sum);
-		 }
+        for (int i = 0; i < in->sampling_cnt; i++)
+         {
+                out->noise_signals[i] = abs(p->mean + p->sigma * (double)rand() / RAND_MAX);
+         }
 	}else{
-		for (int i = 0; i < in->sampling_cnt; i++)
-				 {
-
-						out->noise_signals[i] = 0;
-				 }
-	}
+        memset(out->noise_signals, 0, sizeof(out->noise_signals));
+    }
 	return 0;
 }

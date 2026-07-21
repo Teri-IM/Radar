@@ -1,4 +1,4 @@
-#include "..\include\threshold.h"
+#include "../include/threshold.h"
 
 int threshold_generator (struct GlobalProcessingParam *par, struct data *in, struct Codogramm *thr)
 {
@@ -10,7 +10,7 @@ int threshold_generator (struct GlobalProcessingParam *par, struct data *in, str
 
   /* Цикл заполнения промежуточной структуры пороговыми значениями */
   int i;
-  for(i = 0; i < 1024; i++){
+  for(i = 0; i < 256; i++){
     thr->sign[i].threshold = par->threshold.threshold;
   }
   /**********************************

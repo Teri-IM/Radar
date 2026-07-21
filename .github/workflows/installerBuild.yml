@@ -1,0 +1,225 @@
+name: Pack and Release Windows App
+
+on:
+  pull_request:
+    types: [ closed ]
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # Первая работа: Сборка, сбор зависимостей и генерация инсталлятора
+  build:
+    runs-on: windows-latest
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-win')
+    
+    env:
+      TARGET_NAME: "untitled"
+      QT_VERSION: "6.7.2"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 1. Очистка системного PATH только от конфликтующих путей (не трогая пути Qt)
+    - name: Clean System PATH
+      shell: powershell
+      run: |
+        $filtered_paths = $env:PATH -split ';' | Where-Object { 
+            $_ -notlike "*msys64*" -and 
+            $_ -notlike "C:\mingw64*" -and
+            $_ -notlike "*Strawberry*"
+        }
+        $new_path = $filtered_paths -join ';'
+        echo "PATH=$new_path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    # 2. Установка Qt и компилятора MinGW
+    - name: Install Qt and MinGW Tools
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: ${{ env.QT_VERSION }}
+        arch: "win64_mingw"
+        tools: "tools_mingw90,qt.tools.win64_mingw900"
+        add-tools-to-path: true
+        cache: true
+
+    # 3. Проверка компилятора в PATH
+    - name: Verify Compiler
+      shell: powershell
+      run: |
+        g++ --version
+        mingw32-make --version
+
+    # 4. Скачивание rcedit
+    - name: Download rcedit
+      shell: powershell
+      run: |
+        Invoke-WebRequest -Uri "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile "rcedit.exe"
+
+    # 5. Сборка проекта через qmake
+    - name: Build with qmake and make
+      shell: powershell
+      run: |
+        mkdir build
+        cd build
+        if (Test-Path "../src/src.pro") {
+            qmake ../src/src.pro CONFIG+=release -spec win32-g++
+        } else {
+            qmake ../untitled.pro CONFIG+=release -spec win32-g++
+        }
+        mingw32-make
+
+    # 6. Развертывание зависимостей Qt и принудительное копирование рантайма MinGW
+    - name: Deploy Qt Dependencies and Compiler Runtimes
+      shell: powershell
+      run: |
+        $DIST_DIR = "$pwd\dist"
+        New-Item -ItemType Directory -Path $DIST_DIR
+        
+        # Находим и копируем сам EXE
+        $compiled_exe = Get-ChildItem -Path "build" -Filter "${{ env.TARGET_NAME }}.exe" -Recurse | Select-Object -First 1
+        if ($null -eq $compiled_exe) { throw "Executable file ${{ env.TARGET_NAME }}.exe was not found" }
+        Copy-Item $compiled_exe.FullName -Destination "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
+        
+        # Запуск стандартного windeployqt
+        Write-Host "Запуск windeployqt..."
+        windeployqt --release --compiler-runtime "$DIST_DIR\${{ env.TARGET_NAME }}.exe"
+        
+        # Находим g++, который реально использовался для сборки в этой сессии
+        $gxx_cmd = Get-Command g++ -ErrorAction SilentlyContinue
+        if ($null -eq $gxx_cmd) { throw "g++ was not found in active environment!" }
+        
+        $mingw_bin_dir = Split-Path $gxx_cmd.Source
+        Write-Host "Используем компилятор из папки: $mingw_bin_dir" -ForegroundColor Cyan
+        
+        # Список файлов, которые пропустил windeployqt
+        $runtimes = @("libgcc_s_seh-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll")
+        
+        foreach ($dll in $runtimes) {
+            $src = Join-Path $mingw_bin_dir $dll
+            $dest = Join-Path $DIST_DIR $dll
+            if (Test-Path $src) {
+                Copy-Item $src -Destination $dest -Force
+                Write-Host "Успешно скопирована библиотека: $dll" -ForegroundColor Green
+            } else {
+                Write-Warning "Библиотека $dll не найдена по пути $src"
+            }
+        }
+
+    # 7. Вшивание иконки radar.ico
+    - name: Inject Icon
+      shell: powershell
+      run: |
+        $EXE_PATH = "$pwd\dist\${{ env.TARGET_NAME }}.exe"
+        $ICON_PATH = "$pwd\radar.ico"
+        if (Test-Path $ICON_PATH) {
+            & ".\rcedit.exe" "$EXE_PATH" --set-icon "$ICON_PATH"
+        }
+
+    # 8. Автоматическая генерация скрипта Inno Setup (.iss)
+    - name: Generate Inno Setup Script
+      shell: powershell
+      run: |
+        $DIST_DIR = "$pwd\dist"
+        $ISS_FILE = "$pwd\installer.iss"
+        $ICON_PATH = "$pwd\radar.ico"
+        
+        $SetupIconLine = ""
+        if (Test-Path $ICON_PATH) {
+            $SetupIconLine = "SetupIconFile=$ICON_PATH"
+        }
+
+        $IssTemplate = @"
+        [Setup]
+        AppName=Radar Simulator
+        AppVersion=0.1.${{ github.run_number }}
+        AppPublisher=Radar Simulator Team
+        AppId=RadarSimulator
+        DefaultDirName={localappdata}\RadarSimulator
+        DefaultGroupName=Radar Simulator
+        UninstallDisplayIcon={app}\${{ env.TARGET_NAME }}.exe
+        OutputDir=$pwd
+        OutputBaseFilename=RadarSetup_v0.1.${{ github.run_number }}
+        $SetupIconLine
+        Compression=lzma2/max
+        SolidCompression=yes
+        PrivilegesRequired=lowest
+
+        [Tasks]
+        Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+        
+        [Files]
+        Source: "$DIST_DIR\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+
+        [Run]
+        Filename: "{app}\${{ env.TARGET_NAME }}.exe"; Description: "{cm:LaunchProgram,${{ env.TARGET_NAME }}}"; Flags: nowait postinstall skipifsilent
+        
+        [Icons]
+        Name: "{group}\Radar Simulator"; Filename: "{app}\${{ env.TARGET_NAME }}.exe"
+        Name: "{userdesktop}\Radar Simulator"; Filename: "{app}\${{ env.TARGET_NAME }}.exe"
+        [Code]
+        procedure CurStepChanged(CurStep: TSetupStep);
+        var
+          ResultCode: Integer;
+          UninstallString: String;
+        begin
+          // Перед началом копирования файлов новой версии проверяем наличие старой
+          if CurStep = ssInstall then
+          begin
+            // Ищем путь деинсталляции в реестре текущего пользователя
+            if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\RadarSimulator_is1', 'UninstallString', UninstallString) then
+            begin
+              Log('Found previous version. Launching silent uninstaller...');
+              // Убираем кавычки из пути, если они есть
+              UninstallString := RemoveQuotes(UninstallString);
+              // Запускаем старый unins000.exe скрытно и ждем завершения работы
+              if Exec(UninstallString, '/VERYSILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+              begin
+                Log('Previous version successfully uninstalled.');
+              end;
+            end;
+          end;
+        end;
+        "@
+
+        $IssTemplate | Out-File -FilePath $ISS_FILE -Encoding utf8
+
+    # 9. Компиляция инсталлятора
+    - name: Compile Installer
+      shell: powershell
+      run: |
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "$pwd\installer.iss"
+
+    # 10. Сохранение инсталлятора во временные артефакты
+    - name: Upload Temporary Installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: RadarSetupArtifact
+        path: RadarSetup_v0.1.${{ github.run_number }}.exe
+
+  # Вторая работа: Публикация релиза на GitHub (ждет ручного аппрува в Environments)
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Download compiled installer
+      uses: actions/download-artifact@v4
+      with:
+        name: RadarSetupArtifact
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "v0.1.${{ github.run_number }}"
+        name: "Release v0.1.${{ github.run_number }}"
+        body: "Автоматический стабильный релиз Radar Simulator под Windows."
+        draft: false
+        prerelease: false
+        files: RadarSetup_v0.1.${{ github.run_number }}.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

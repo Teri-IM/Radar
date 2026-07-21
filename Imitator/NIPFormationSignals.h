@@ -13,6 +13,7 @@
 #include "NIPFormationSignalsParam.h"
 #include "NIPPosition.h"
 #include "UnifiedTimeParam.h"
+#include <string.h>
 struct NIPSignalsOut{
     float *nip_signals;
 };
